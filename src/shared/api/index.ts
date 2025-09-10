@@ -14,7 +14,9 @@ import type {
   VisitReport,
   PaginatedResponse,
   EmployeeFilter,
-  ReportFilter
+  Role,
+  Permission,
+  ReportFilter,
 } from '../types';
 
 // Additional filter types for APIs
@@ -56,7 +58,7 @@ const api = axios.create({
 // Request interceptor to add token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('auth_token');
+    const token = localStorage.getItem('mts_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -70,9 +72,19 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('auth_token');
+      localStorage.removeItem('mts_token');
       localStorage.removeItem('user');
       window.location.href = '/login';
+    } else if (error.response?.status === 403) {
+      // Show a user-friendly access denied message without redirect
+      // The backend must still enforce permissions via middleware
+      try {
+        // Avoid multiple alerts flooding
+        if (!(window as any).__MTS_LAST_403__ || Date.now() - (window as any).__MTS_LAST_403__ > 1500) {
+          (window as any).__MTS_LAST_403__ = Date.now();
+          window.alert('Anda tidak punya akses');
+        }
+      } catch {}
     }
     return Promise.reject(error);
   }
@@ -103,6 +115,15 @@ export const employeeAPI = {
   
   update: (id: number, data: Partial<EmployeeForm>) => 
     api.put<Employee>(`/employees/${id}`, data),
+
+  // Upload/update employee photo (multipart/form-data)
+  updatePhoto: (id: number, file: File | Blob) => {
+    const form = new FormData();
+    form.append('photo', file);
+    return api.post(`/employees/${id}/photo`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   
   delete: (id: number) => 
     api.delete(`/employees/${id}`),
@@ -142,6 +163,10 @@ export const geofenceAPI = {
   
   delete: (id: number) => 
     api.delete(`/geofences/${id}`),
+
+  // Sync DWH trigger (requires permission: sync-geofences)
+  syncDwhLocations: () =>
+    api.post('/sync/dwh-locations'),
 };
 
 // Work Plan API
@@ -161,8 +186,9 @@ export const workPlanAPI = {
   delete: (id: number) => 
     api.delete(`/work-plans/${id}`),
   
-  updateStatus: (id: number, status: string) => 
-    api.patch(`/work-plans/${id}/status`, { status }),
+  // Approve endpoint (requires permission: approve-work-plans)
+  approve: (id: number) =>
+    api.post(`/work-plans/${id}/approve`),
 };
 
 // Live Tracking API
@@ -189,10 +215,75 @@ export const dashboardAPI = {
     }),
 };
 
-// Parameters API (for dropdowns and options)
-export const parametersAPI = {
+// Master Data API (for dropdowns and options) - sesuai dokumentasi
+export const masterDataAPI = {
+  // Get all master data sekaligus
+  getAll: () =>
+    api.get<{
+      wilayah: Array<{value: string, label: string}>;
+      plantation_groups: Array<{value: string, label: string}>;
+    }>('/master-data/all'),
+
+  // Get master data individual
+  getWilayah: () => 
+    api.get<{data: Array<{value: string, label: string}>}>('/master-data/wilayah'),
+  
   getPlantationGroups: () => 
-    api.get<string[]>('/parameters/plantation-groups'),
+    api.get<{data: Array<{value: string, label: string}>}>('/master-data/plantation-groups'),
+
+  // Get lokasi berdasarkan wilayah atau PG
+  getLokasiByWilayah: (wilayah: string) =>
+    api.get<{data: Array<{value: string, label: string}>}>(`/master-data/lokasi/by-wilayah?wilayah=${wilayah}`),
+
+  getLokasiByPg: (pg: string) =>
+    api.get<{data: Array<{value: string, label: string}>}>(`/master-data/lokasi/by-pg?pg=${pg}`),
+};
+
+// RBAC API: roles and permissions
+export const rbacAPI = {
+  // Roles management
+  getAllRoles: () => 
+    api.get<PaginatedResponse<Role>>('/roles'),
+  
+  getRoleById: (id: number) => 
+    api.get<{data: Role}>(`/roles/${id}`),
+  
+  createRole: (data: { name: string; permissions: number[] }) => 
+    api.post<{data: Role}>('/roles', data),
+  
+  updateRole: (id: number, data: { name: string; permissions: number[] }) => 
+    api.put<{data: Role}>(`/roles/${id}`, data),
+  
+  deleteRole: (id: number) => 
+    api.delete(`/roles/${id}`),
+
+  // Permissions management
+  getAllPermissions: () => 
+    api.get<{data: Permission[]}>('/permissions'),
+};
+
+// Legacy Parameters API (keep for backward compatibility)
+export const parametersAPI = {
+  // Generic parameter endpoints (align with Laravel routes)
+  getAll: (params?: Record<string, unknown>) =>
+    api.get('/parameters', { params }),
+
+  getById: (id: number) =>
+    api.get(`/parameters/${id}`),
+
+  update: (id: number, data: Record<string, unknown>) =>
+    api.put(`/parameters/${id}`, data),
+
+  getGroups: () =>
+    api.get('/parameters/groups'),
+
+  // Mobile settings endpoint
+  getMobileSettings: () =>
+    api.get('/mobile/settings'),
+
+  // Legacy endpoints - akan diarahkan ke masterDataAPI
+  getPlantationGroups: () => 
+    masterDataAPI.getPlantationGroups().then(res => ({ data: res.data.data.map(item => item.value) })),
   
   getBlocks: (plantationGroup?: string) => 
     api.get<string[]>('/parameters/blocks', { 
@@ -203,6 +294,9 @@ export const parametersAPI = {
     api.get<string[]>('/parameters/subblocks', { 
       params: { plantation_group: plantationGroup, block } 
     }),
+  
+  getWilayah: () => 
+    masterDataAPI.getWilayah().then(res => ({ data: res.data.data.map(item => item.value) })),
   
   getPositions: () => 
     api.get<string[]>('/parameters/positions'),

@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hilangkan ikon bawaan Edge/IE */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+
 /* Custom base styles */
 @layer base {
   html {

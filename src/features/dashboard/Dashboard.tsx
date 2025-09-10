@@ -144,14 +144,16 @@ function Dashboard() {
       </div>
 
       {/* Map and Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Map Component - Full Width */}
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-2">
           <Card
             title="Lokasi"
             subtitle=""
           >
-            <MapView />
+            <div className='h-[500px]'>
+              <MapView />
+            </div>
           </Card>
         </div>
       </div>

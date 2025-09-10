@@ -39,16 +39,24 @@ export interface AuthResponse {
 
 // Employee Types
 export interface Employee {
-  id: number;
+  employee_id: string; // sesuai dengan EmployeeResource 
+  id?: number; // untuk backward compatibility
   name: string;
-  email: string;
   position: string;
+  phone: string;
   plantation_group: string;
-  block: string;
-  subblock: string;
-  is_active: boolean;
+  wilayah: string;
+  user?: {
+    email: string;
+  };
+  roles?: Array<string>; // array of role names dari EmployeeResource
+  is_active?: boolean;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+  // Legacy fields untuk backward compatibility
+  email?: string;
+  block?: string;
+  subblock?: string;
 }
 
 // Location Types
@@ -164,15 +172,23 @@ export interface PaginatedResponse<T> {
 }
 
 // Form Types
+// Form Types - disesuaikan dengan migration database yang sudah diperbaiki
 export interface EmployeeForm {
+  // Employee table fields (sesuai migration terbaru)
+  id: string; // employee ID (primary key)
   name: string;
+  position: string;
+  phone: string;
+  plantation_group?: string; // ✅ Sudah ada di migration (nullable)
+  wilayah?: string; // ✅ Sudah ada di migration (nullable)
+  
+  // User table fields (untuk membuat user account)
   email: string;
   password?: string;
-  position: string;
-  plantation_group: string;
-  block: string;
-  subblock: string;
-  is_active: boolean;
+  
+  // Additional fields
+  role_id?: number | ''; // ✅ Menggunakan role_id (number) bukan role (string)
+  is_active?: boolean;
 }
 
 export interface GeofenceForm {

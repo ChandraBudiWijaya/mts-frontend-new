@@ -35,11 +35,8 @@ export default function MapView() {
   }, [])
 
   return (
-    <div className="relative w-full h-80 md:h-96 rounded-lg overflow-hidden border">
+    <div className="flex w-full h-80 md:h-full rounded-lg overflow-hidden border">
       <div ref={mapEl} className="w-full h-full" />
-      <div className="absolute top-4 left-4 bg-white/90 rounded shadow-sm px-2 py-1">
-        <span className="text-xs font-medium text-gray-700">Lokasi</span>
-      </div>
     </div>
   )
 }

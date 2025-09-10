@@ -51,11 +51,7 @@ export default function LocationMap({ center = [-5.4, 105.3], polygon }: Props) 
     }
   }, [])
 
-  // Change base layer when active changes
-  useEffect(() => {
-    const L = window.L
-    // we rebuild layer on toggle by reinitializing component state via key on wrapper
-  }, [active])
+  // Change base layer when active changes is handled by key on wrapper
 
   return (
     <div className="relative">
@@ -71,4 +67,3 @@ export default function LocationMap({ center = [-5.4, 105.3], polygon }: Props) 
     </div>
   )
 }
-

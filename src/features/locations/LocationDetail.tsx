@@ -5,70 +5,148 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Map from '../../components/ui/Map';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import Alert from '../../components/ui/Alert';
+import { geofenceAPI } from '../../shared/api';
 
-interface LocationDetailType {
-  no: number;
-  pg: string;
-  wilayah: string;
-  lokasi: string;
-  luas: string;
-  coordinates: { lat: number; lng: number };
-  geofence: { lat: number; lng: number }[];
-}
+interface LatLng { lat: number; lng: number }
+// removed unused CoordinatesRaw
+
+type Meta = {
+  pg_group?: string;
+  region?: string;
+  location_code?: string;
+  area_size?: number | string;
+  name?: string;
+} | null;
+
+const isObject = (val: unknown): val is Record<string, unknown> =>
+  typeof val === 'object' && val !== null;
+
+const hasData = <T,>(val: unknown): val is { data: T } =>
+  isObject(val) && 'data' in val;
+
+const isTruthy = <T,>(v: T | null | undefined | false): v is T => Boolean(v);
 
 function LocationDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [location, setLocation] = useState<LocationDetailType | null>(null);
+  const [center, setCenter] = useState<LatLng | null>(null);
+  const [polygon, setPolygon] = useState<LatLng[]>([]);
+  const [meta, setMeta] = useState<Meta>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const toNumber = (v: unknown): number | null => {
+    const n = typeof v === 'string' ? parseFloat(v) : typeof v === 'number' ? v : NaN;
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const normalizeCoordinates = (raw: unknown): LatLng[] => {
+    try {
+      let data: unknown = raw;
+      if (typeof data === 'string') {
+        // Attempt JSON parse, fallback to comma-separated "lng, lat, lng, lat, ..."
+        try {
+          data = JSON.parse(data);
+        } catch {
+          const s = String(data);
+          const parts = s.split(',').map((x: string) => parseFloat(x.trim())).filter((n: number) => Number.isFinite(n));
+          const pts: LatLng[] = [];
+          for (let i = 0; i < parts.length; i += 2) {
+            const lng = parts[i];
+            const lat = parts[i + 1];
+            if (Number.isFinite(lat) && Number.isFinite(lng)) pts.push({ lat, lng });
+          }
+          return pts;
+        }
+      }
+
+      if (Array.isArray(data)) {
+        if (data.length > 0 && Array.isArray(data[0]) && (data[0] as unknown[]).length >= 2) {
+          // [[lng, lat], ...] or [[lat, lng], ...]
+          return (data as unknown[])
+            .map((p): LatLng | null => {
+              if (!Array.isArray(p) || p.length < 2) return null;
+              const a = toNumber(p[0]);
+              const b = toNumber(p[1]);
+              if (a == null || b == null) return null;
+              const isLngFirst = Math.abs(a) > 1 && Math.abs(a) >= Math.abs(b);
+              const lng = isLngFirst ? a : b;
+              const lat = isLngFirst ? b : a;
+              return { lat, lng };
+            })
+            .filter(isTruthy);
+        }
+        if (data.length > 0 && typeof data[0] === 'object' && data[0] !== null) {
+          return (data as unknown[])
+            .map((p): LatLng | null => {
+              if (!isObject(p)) return null;
+              const lat = toNumber((p as Record<string, unknown>).lat ?? (p as Record<string, unknown>).latitude);
+              const lng = toNumber((p as Record<string, unknown>).lng ?? (p as Record<string, unknown>).longitude ?? (p as Record<string, unknown>).long);
+              if (lat == null || lng == null) return null;
+              return { lat, lng };
+            })
+            .filter(isTruthy);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to normalize coordinates:', e);
+    }
+    return [];
+  };
+
+  const computeCenter = (points: LatLng[]): LatLng | null => {
+    if (!points || points.length === 0) return null;
+    let sumLat = 0, sumLng = 0;
+    points.forEach(p => { sumLat += p.lat; sumLng += p.lng; });
+    return { lat: sumLat / points.length, lng: sumLng / points.length };
+  };
 
   useEffect(() => {
-    const fetchLocationDetail = async () => {
+    const fetchDetail = async () => {
       if (!id) return;
       try {
         setLoading(true);
+        setError('');
+        const res = await geofenceAPI.getById(parseInt(id, 10));
+        const payload: unknown = res.data as unknown;
+        const recordUnknown: unknown = hasData(payload) ? payload.data : payload;
 
-        const locationCoords = {
-          1: { lat: -7.384746, lng: 105.0303443 },
-          2: { lat: -7.384745, lng: 105.0303443 },
-          3: { lat: -7.384746, lng: 105.0303443 },
-          4: { lat: -7.384746, lng: 105.0303443 },
-          5: { lat: -7.384746, lng: 105.0303443 },
-        } as const;
+        let nextMeta: Meta = null;
+        let coordsRaw: unknown = undefined;
+        if (isObject(recordUnknown)) {
+          const rec = recordUnknown as Record<string, unknown>;
+          nextMeta = {
+            pg_group: typeof rec.pg_group === 'string' ? rec.pg_group : undefined,
+            region: typeof rec.region === 'string' ? rec.region : undefined,
+            location_code: typeof rec.location_code === 'string' ? rec.location_code : undefined,
+            area_size:
+              typeof rec.area_size === 'number' || typeof rec.area_size === 'string'
+                ? rec.area_size
+                : undefined,
+            name: typeof rec.name === 'string' ? rec.name : undefined,
+          };
+          coordsRaw = rec.coordinates;
+        }
 
-        const current = locationCoords[(parseInt(id, 10) as 1 | 2 | 3 | 4 | 5) || 1];
-
-        const mockDetail: LocationDetailType = {
-          no: parseInt(id, 10),
-          pg: 'PG 1',
-          wilayah: 'W01',
-          lokasi: `00${id}`,
-          luas: id === '1' ? '6,79' : id === '2' ? '9,19' : id === '3' ? '7,00' : id === '4' ? '13,98' : '3,34',
-          coordinates: current,
-          geofence: [
-            { lat: current.lat - 0.00005, lng: current.lng - 0.00005 },
-            { lat: current.lat - 0.00005, lng: current.lng + 0.00005 },
-            { lat: current.lat + 0.00005, lng: current.lng + 0.00005 },
-            { lat: current.lat + 0.00005, lng: current.lng - 0.00005 },
-            { lat: current.lat - 0.00005, lng: current.lng - 0.00005 },
-          ],
-        };
-
-        setTimeout(() => {
-          setLocation(mockDetail);
-          setLoading(false);
-        }, 400);
+        setMeta(nextMeta);
+        const coords = normalizeCoordinates(coordsRaw);
+        setPolygon(coords);
+        const c = computeCenter(coords) || { lat: -4.826, lng: 105.239 };
+        setCenter(c);
       } catch (e) {
-        console.error(e);
+        console.error('Error fetching geofence detail:', e);
+        setError('Gagal memuat detail lokasi');
+      } finally {
         setLoading(false);
       }
     };
-
-    fetchLocationDetail();
+    fetchDetail();
   }, [id]);
 
   if (loading) return <LoadingSpinner />;
-  if (!location) return <div className="text-center py-12 text-gray-500">Location not found</div>;
+  if (error) return <div className="p-6"><Alert variant="error">{error}</Alert></div>;
+  if (!center) return <div className="text-center py-12 text-gray-500">Data tidak tersedia</div>;
 
   return (
     <div className="space-y-6 bg-gray-50 min-h-screen p-6">
@@ -88,7 +166,8 @@ function LocationDetail() {
       <div>
         <h2 className="text-lg font-medium text-gray-900">Detail Lokasi</h2>
         <p className="text-gray-600">
-          {location.pg} • {location.wilayah} • {location.lokasi} • Luas {location.luas} Ha
+          {(meta?.pg_group || '-') + ' | ' + (meta?.region || '-') + ' | ' + (meta?.location_code || meta?.name || '-') + ' | '} 
+          {`Luas ${typeof meta?.area_size === 'number' ? (meta?.area_size as number).toFixed(2) : (meta?.area_size ?? '-') } Ha`}
         </p>
       </div>
 
@@ -100,7 +179,7 @@ function LocationDetail() {
             <h2 className="text-lg font-medium text-gray-900">Peta Geofence</h2>
           </div>
           <div id="map">
-            <Map center={location.coordinates} geofence={location.geofence} height="h-96" />
+            <Map center={center} geofence={polygon} height="h-96" />
           </div>
         </div>
       </Card>
@@ -119,7 +198,7 @@ function LocationDetail() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {location.geofence.map((p, idx) => (
+                {polygon.map((p, idx) => (
                   <tr key={idx} className="hover:bg-gray-50 transition-colors duration-200">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{idx + 1}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -140,4 +219,3 @@ function LocationDetail() {
 }
 
 export default LocationDetail;
-

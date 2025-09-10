@@ -9,26 +9,24 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Only true when actively checking auth
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      const token = localStorage.getItem('auth_token');
-
+    const initializeAuth = () => {
+      // Simplified initialization - load from localStorage immediately
+      const token = localStorage.getItem('mts_token');
+      
       if (token) {
-        try {
-          // Verify token with backend and get latest user data
-          const response = await authAPI.getUser();
-          setUser(response.data as unknown as User);
-        } catch (error) {
-          // Token is invalid, clear storage
-          localStorage.removeItem('auth_token');
-          localStorage.removeItem('user');
-          console.error('Token verification failed:', error);
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          try {
+            setUser(JSON.parse(storedUser));
+          } catch {
+            localStorage.removeItem('mts_token');
+            localStorage.removeItem('user');
+          }
         }
       }
-
-      setLoading(false);
     };
 
     initializeAuth();
@@ -43,7 +41,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const { user, token } = response.data;
       
       // Store token and user data
-      localStorage.setItem('auth_token', token);
+      localStorage.setItem('mts_token', token);
       localStorage.setItem('user', JSON.stringify(user));
       
       setUser(user);
@@ -91,7 +89,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       console.error('Logout error:', error);
     } finally {
       // Always clear local storage regardless of API success
-      localStorage.removeItem('auth_token');
+      localStorage.removeItem('mts_token');
       localStorage.removeItem('user');
       setUser(null);
     }
@@ -109,7 +107,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return user.roles.some(role => role.slug === roleName);
   };
 
-  const isAuthenticated = !!user && !!localStorage.getItem('auth_token');
+  const isAuthenticated = !!user && !!localStorage.getItem('mts_token');
 
   return (
     <AuthContext.Provider value={{

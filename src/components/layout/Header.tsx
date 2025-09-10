@@ -28,8 +28,9 @@ export default function Header({ onMenuToggle }: HeaderProps) {
   return (
     <header className="bg-white shadow-sm border-b border-primary-100 px-6 py-3">
       <div className="flex items-center justify-between">
-        {/* Left side - Menu toggle (for mobile) */}
+        {/* Left side - Mobile menu and welcome message */}
         <div className="flex items-center space-x-4">
+          {/* Mobile menu toggle */}
           <button
             onClick={onMenuToggle}
             className="lg:hidden p-2 rounded-md text-primary-700 hover:text-primary-900 hover:bg-primary-50"
@@ -37,10 +38,11 @@ export default function Header({ onMenuToggle }: HeaderProps) {
             <Bars3Icon className="h-6 w-6" />
           </button>
           
+          {/* Welcome message */}
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">
+            <h2 className="text-xl font-semibold text-gray-900">
               Welcome back, {user?.name?.split(' ')[0] || 'Guest'}!
-            </h1>
+            </h2>
             <p className="text-sm text-gray-600">
               {user?.position || 'Demo Mode'} • {user?.plantation_group || 'MTS Dashboard'}
             </p>
