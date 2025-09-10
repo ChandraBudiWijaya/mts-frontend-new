@@ -75,11 +75,14 @@ const Parameters: React.FC = () => {
       setLoadingGroups(true);
       setError(null);
       const response = await parametersAPI.getGroups();
-      setGroups(response.data || []);
+      const groupsData = response.data || [];
+      // Ensure we always set an array
+      setGroups(Array.isArray(groupsData) ? groupsData : []);
       setSuccess('Groups loaded successfully!');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Error loading groups'));
+      setGroups([]); // Set empty array on error
     } finally {
       setLoadingGroups(false);
     }
@@ -100,9 +103,12 @@ const Parameters: React.FC = () => {
       if (filters.search) params.search = filters.search;
       
       const response = await parametersAPI.getAll(params);
-      setParameters(response.data || []);
+      const parametersData = response.data || [];
+      // Ensure we always set an array
+      setParameters(Array.isArray(parametersData) ? parametersData : []);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Error loading parameters'));
+      setParameters([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -285,7 +291,7 @@ const Parameters: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">All Groups</option>
-                {groups.map((group) => (
+                {Array.isArray(groups) && groups.map((group) => (
                   <option key={group} value={group}>
                     {group}
                   </option>
@@ -364,7 +370,7 @@ const Parameters: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {parameters.map((param) => (
+                  {Array.isArray(parameters) && parameters.map((param) => (
                     <tr key={param.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {param.param_key}
@@ -400,7 +406,7 @@ const Parameters: React.FC = () => {
                     </tr>
                   ))}
                   
-                  {parameters.length === 0 && (
+                  {(!Array.isArray(parameters) || parameters.length === 0) && (
                     <tr>
                       <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
                         No parameters found
