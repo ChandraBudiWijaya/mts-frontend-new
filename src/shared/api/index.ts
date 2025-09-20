@@ -19,7 +19,9 @@ import type {
   ReportFilter,
 } from '../types';
 
-// Additional filter types for APIs
+/* ================================
+   Filter Interfaces
+================================ */
 interface LocationFilter {
   plantation_group?: string;
   block?: string;
@@ -46,16 +48,18 @@ interface LiveTrackingFilter {
   end_time?: string;
 }
 
-// Create axios instance with base configuration
+/* ================================
+   Axios Instance
+================================ */
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:8000/api',
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
 });
 
-// Request interceptor to add token
+// Request interceptor → add token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('mts_token');
@@ -67,7 +71,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor for error handling
+// Response interceptor → handle error globally
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
@@ -76,11 +80,11 @@ api.interceptors.response.use(
       localStorage.removeItem('user');
       window.location.href = '/login';
     } else if (error.response?.status === 403) {
-      // Show a user-friendly access denied message without redirect
-      // The backend must still enforce permissions via middleware
       try {
-        // Avoid multiple alerts flooding
-        if (!(window as any).__MTS_LAST_403__ || Date.now() - (window as any).__MTS_LAST_403__ > 1500) {
+        if (
+          !(window as any).__MTS_LAST_403__ ||
+          Date.now() - (window as any).__MTS_LAST_403__ > 1500
+        ) {
           (window as any).__MTS_LAST_403__ = Date.now();
           window.alert('Anda tidak punya akses');
         }
@@ -90,33 +94,26 @@ api.interceptors.response.use(
   }
 );
 
-// Authentication API
+/* ================================
+   Authentication API
+================================ */
 export const authAPI = {
   login: (credentials: LoginCredentials) => 
     api.post<AuthResponse>('/login', credentials),
-  
-  logout: () => 
-    api.post('/logout'),
-  
-  getUser: () => 
-    api.get('/user'),
+  logout: () => api.post('/logout'),
+  getUser: () => api.get('/user'),
 };
 
-// Employee API
+/* ================================
+   Employee API
+================================ */
 export const employeeAPI = {
   getAll: (params?: EmployeeFilter) => 
     api.get<PaginatedResponse<Employee>>('/employees', { params }),
-  
-  getById: (id: number) => 
-    api.get<Employee>(`/employees/${id}`),
-  
-  create: (data: EmployeeForm) => 
-    api.post<Employee>('/employees', data),
-  
+  getById: (id: number) => api.get<Employee>(`/employees/${id}`),
+  create: (data: EmployeeForm) => api.post<Employee>('/employees', data),
   update: (id: number, data: Partial<EmployeeForm>) => 
     api.put<Employee>(`/employees/${id}`, data),
-
-  // Upload/update employee photo (multipart/form-data)
   updatePhoto: (id: number, file: File | Blob) => {
     const form = new FormData();
     form.append('photo', file);
@@ -124,182 +121,146 @@ export const employeeAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
-  
-  delete: (id: number) => 
-    api.delete(`/employees/${id}`),
+  remove: (id: number) => api.delete(`/employees/${id}`),
 };
 
-// Location API
+/* ================================
+   Location API
+================================ */
 export const locationsAPI = {
   getAll: (params?: LocationFilter) => 
     api.get<PaginatedResponse<Location>>('/locations', { params }),
-  
-  getById: (id: string) => 
-    api.get<Location>(`/locations/${id}`),
-  
-  create: (data: Partial<Location>) => 
-    api.post<Location>('/locations', data),
-  
+  getById: (id: string) => api.get<Location>(`/locations/${id}`),
+  create: (data: Partial<Location>) => api.post<Location>('/locations', data),
   update: (id: string, data: Partial<Location>) => 
     api.put<Location>(`/locations/${id}`, data),
-  
-  delete: (id: string) => 
-    api.delete(`/locations/${id}`),
+  remove: (id: string) => api.delete(`/locations/${id}`),
 };
 
-// Geofence API
+/* ================================
+   Geofence API
+================================ */
 export const geofenceAPI = {
   getAll: (params?: GeofenceFilter) => 
     api.get<PaginatedResponse<Geofence>>('/geofences', { params }),
-  
-  getById: (id: number) => 
-    api.get<Geofence>(`/geofences/${id}`),
-  
-  create: (data: GeofenceForm) => 
-    api.post<Geofence>('/geofences', data),
-  
+  getById: (id: number) => api.get<Geofence>(`/geofences/${id}`),
+  create: (data: GeofenceForm) => api.post<Geofence>('/geofences', data),
   update: (id: number, data: Partial<GeofenceForm>) => 
     api.put<Geofence>(`/geofences/${id}`, data),
-  
-  delete: (id: number) => 
-    api.delete(`/geofences/${id}`),
-
-  // Sync DWH trigger (requires permission: sync-geofences)
-  syncDwhLocations: () =>
-    api.post('/sync/dwh-locations'),
+  remove: (id: number) => api.delete(`/geofences/${id}`),
+  syncDwhLocations: () => api.post('/sync/dwh-locations'),
 };
 
-// Work Plan API
+/* ================================
+   Work Plan API
+================================ */
 export const workPlanAPI = {
   getAll: (params?: WorkPlanFilter) => 
     api.get<PaginatedResponse<WorkPlan>>('/work-plans', { params }),
-  
-  getById: (id: number) => 
-    api.get<WorkPlan>(`/work-plans/${id}`),
-  
-  create: (data: WorkPlanForm) => 
-    api.post<WorkPlan>('/work-plans', data),
-  
+  getById: (id: number) => api.get<WorkPlan>(`/work-plans/${id}`),
+  create: (data: WorkPlanForm) => api.post<WorkPlan>('/work-plans', data),
   update: (id: number, data: Partial<WorkPlanForm>) => 
     api.put<WorkPlan>(`/work-plans/${id}`, data),
-  
-  delete: (id: number) => 
-    api.delete(`/work-plans/${id}`),
-  
-  // Approve endpoint (requires permission: approve-work-plans)
-  approve: (id: number) =>
-    api.post(`/work-plans/${id}/approve`),
+  remove: (id: number) => api.delete(`/work-plans/${id}`),
+  approve: (id: number) => api.post(`/work-plans/${id}/approve`),
 };
 
-// Live Tracking API
+/* ================================
+   Live Tracking API
+================================ */
 export const liveTrackingAPI = {
   getCurrent: (params?: LiveTrackingFilter) => 
     api.get<LiveTracking[]>('/live-tracking', { params }),
-  
   getHistory: (userId: number, params?: LiveTrackingFilter) => 
     api.get<LiveTracking[]>(`/live-tracking/history/${userId}`, { params }),
 };
 
-// Dashboard & Reports API
+/* ================================
+   Dashboard & Reports API
+================================ */
 export const dashboardAPI = {
   getStats: (params?: ReportFilter) => 
     api.get<DashboardStats>('/reports/dashboard', { params }),
-  
   getVisitDetails: (params?: ReportFilter) => 
     api.get<PaginatedResponse<VisitReport>>('/reports/visits', { params }),
-  
   exportVisits: (params?: ReportFilter) => 
     api.get('/reports/visits/export', { 
       params,
-      responseType: 'blob'
+      responseType: 'blob',
     }),
 };
 
-// Master Data API (for dropdowns and options) - sesuai dokumentasi
+/* ================================
+   Master Data API
+================================ */
 export const masterDataAPI = {
-  // Get all master data sekaligus
   getAll: () =>
     api.get<{
-      wilayah: Array<{value: string, label: string}>;
-      plantation_groups: Array<{value: string, label: string}>;
+      wilayah: Array<{ value: string; label: string }>;
+      plantation_groups: Array<{ value: string; label: string }>;
     }>('/master-data/all'),
 
-  // Get master data individual
   getWilayah: () => 
-    api.get<{data: Array<{value: string, label: string}>}>('/master-data/wilayah'),
-  
-  getPlantationGroups: () => 
-    api.get<{data: Array<{value: string, label: string}>}>('/master-data/plantation-groups'),
+    api.get<{ data: Array<{ value: string; label: string }> }>('/master-data/wilayah'),
 
-  // Get lokasi berdasarkan wilayah atau PG
+  getPlantationGroups: () => 
+    api.get<{ data: Array<{ value: string; label: string }> }>('/master-data/plantation-groups'),
+
   getLokasiByWilayah: (wilayah: string) =>
-    api.get<{data: Array<{value: string, label: string}>}>(`/master-data/lokasi/by-wilayah?wilayah=${wilayah}`),
+    api.get<{ data: Array<{ value: string; label: string }> }>(
+      `/master-data/lokasi/by-wilayah?wilayah=${wilayah}`
+    ),
 
   getLokasiByPg: (pg: string) =>
-    api.get<{data: Array<{value: string, label: string}>}>(`/master-data/lokasi/by-pg?pg=${pg}`),
+    api.get<{ data: Array<{ value: string; label: string }> }>(
+      `/master-data/lokasi/by-pg?pg=${pg}`
+    ),
 };
 
-// RBAC API: roles and permissions
+/* ================================
+   RBAC API
+================================ */
 export const rbacAPI = {
-  // Roles management
-  getAllRoles: () => 
-    api.get<PaginatedResponse<Role>>('/roles'),
-  
-  getRoleById: (id: number) => 
-    api.get<{data: Role}>(`/roles/${id}`),
-  
+  getAllRoles: () => api.get<PaginatedResponse<Role>>('/roles'),
+  getRoleById: (id: number) => api.get<{ data: Role }>(`/roles/${id}`),
   createRole: (data: { name: string; permissions: number[] }) => 
-    api.post<{data: Role}>('/roles', data),
-  
+    api.post<{ data: Role }>('/roles', data),
   updateRole: (id: number, data: { name: string; permissions: number[] }) => 
-    api.put<{data: Role}>(`/roles/${id}`, data),
-  
-  deleteRole: (id: number) => 
-    api.delete(`/roles/${id}`),
-
-  // Permissions management
-  getAllPermissions: () => 
-    api.get<{data: Permission[]}>('/permissions'),
+    api.put<{ data: Role }>(`/roles/${id}`, data),
+  removeRole: (id: number) => api.delete(`/roles/${id}`),
+  getAllPermissions: () => api.get<{ data: Permission[] }>('/permissions'),
 };
 
-// Legacy Parameters API (keep for backward compatibility)
+/* ================================
+   Parameters API
+================================ */
 export const parametersAPI = {
-  // Generic parameter endpoints (align with Laravel routes)
-  getAll: (params?: Record<string, unknown>) =>
-    api.get('/parameters', { params }),
+  getAll: (params?: Record<string, unknown>) => api.get('/parameters', { params }),
+  getById: (id: number) => api.get(`/parameters/${id}`),
+  create: (data: Record<string, unknown>) => api.post('/parameters', data),
+  update: (id: number, data: Record<string, unknown>) => api.put(`/parameters/${id}`, data),
+  remove: (id: number) => api.delete(`/parameters/${id}`),
+  getGroups: () => api.get('/parameters/groups'),
+  getMobileSettings: () => api.get('/mobile/settings'),
 
-  getById: (id: number) =>
-    api.get(`/parameters/${id}`),
+  // Legacy mappings
+  getPlantationGroups: () =>
+    masterDataAPI.getPlantationGroups().then((res) => ({
+      data: res.data.data.map((item) => item.value),
+    })),
 
-  update: (id: number, data: Record<string, unknown>) =>
-    api.put(`/parameters/${id}`, data),
+  getBlocks: (plantationGroup?: string) =>
+    api.get<string[]>('/parameters/blocks', { params: { plantation_group: plantationGroup } }),
 
-  getGroups: () =>
-    api.get('/parameters/groups'),
+  getSubblocks: (plantationGroup?: string, block?: string) =>
+    api.get<string[]>('/parameters/subblocks', { params: { plantation_group: plantationGroup, block } }),
 
-  // Mobile settings endpoint
-  getMobileSettings: () =>
-    api.get('/mobile/settings'),
+  getWilayah: () =>
+    masterDataAPI.getWilayah().then((res) => ({
+      data: res.data.data.map((item) => item.value),
+    })),
 
-  // Legacy endpoints - akan diarahkan ke masterDataAPI
-  getPlantationGroups: () => 
-    masterDataAPI.getPlantationGroups().then(res => ({ data: res.data.data.map(item => item.value) })),
-  
-  getBlocks: (plantationGroup?: string) => 
-    api.get<string[]>('/parameters/blocks', { 
-      params: { plantation_group: plantationGroup } 
-    }),
-  
-  getSubblocks: (plantationGroup?: string, block?: string) => 
-    api.get<string[]>('/parameters/subblocks', { 
-      params: { plantation_group: plantationGroup, block } 
-    }),
-  
-  getWilayah: () => 
-    masterDataAPI.getWilayah().then(res => ({ data: res.data.data.map(item => item.value) })),
-  
-  getPositions: () => 
-    api.get<string[]>('/parameters/positions'),
+  getPositions: () => api.get<string[]>('/parameters/positions'),
 };
 
 export default api;

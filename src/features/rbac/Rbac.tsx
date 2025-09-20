@@ -3,7 +3,7 @@ import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import { rbacAPI } from '../../shared/api';
-import { getErrorMessage } from '../../utils/errorHandler';
+import { getErrorMessage } from '../../shared/utils/errorHandler';
 import type { Role, Permission } from '../../shared/types';
 
 interface RoleFormData {
@@ -155,7 +155,7 @@ const Rbac = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Role & Permission Management</h1>
-          <p className="text-gray-600 mt-1">Kelola role pengguna dan permission sistem</p>
+          <p className="text-sm text-gray-600 mt-1">Kelola role pengguna dan permission sistem</p>
         </div>
         <div className="flex space-x-2">
           <Button 

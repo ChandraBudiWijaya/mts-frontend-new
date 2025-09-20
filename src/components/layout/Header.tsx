@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../shared/hooks';
+import Logo from "../../assets/images/GGF_MTS.jpg";
 import {
   UserIcon,
   Bars3Icon,
@@ -26,10 +27,13 @@ export default function Header({ onMenuToggle }: HeaderProps) {
   };
 
   return (
-    <header className="bg-white shadow-sm border-b border-primary-100 px-6 py-3">
-      <div className="flex items-center justify-between">
+    <header className="bg-white shadow-sm border-b border-primary-100 px-6 h-16 flex items-center">
+      <div className="w-full flex items-center justify-between">
         {/* Left side - Mobile menu and welcome message */}
         <div className="flex items-center space-x-4">
+          <div className="w-12 h-12 rounded-lg p-2 flex items-center justify-center">
+            <img src={Logo} alt="MTS" className="w-full h-full object-contain" />
+          </div>
           {/* Mobile menu toggle */}
           <button
             onClick={onMenuToggle}

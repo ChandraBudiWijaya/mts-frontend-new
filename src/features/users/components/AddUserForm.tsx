@@ -3,7 +3,6 @@ import Input from '../../../components/ui/Input';
 import Button from '../../../components/ui/Button';
 import type { Role } from '../../../shared/types';
 import { CameraIcon } from '@heroicons/react/24/outline';
-import { stringArrayToDropdown, wilayahLabelMap } from '../../../shared/utils/masterData';
 
 export interface AddUserValues {
   id: string; // employee ID
@@ -22,7 +21,7 @@ export interface AddUserValues {
 interface AddUserFormProps {
   roles: Role[];
   pgOptions: string[];
-  wilayahOptions: string[];
+  wilayahOptions?: string[];
   onCancel: () => void;
   onSubmit?: (values: AddUserValues) => void;
 }
@@ -41,14 +40,11 @@ const initialValues: AddUserValues = {
   photoFile: null,
 };
 
-export default function AddUserForm({ roles, pgOptions, wilayahOptions, onCancel, onSubmit }: AddUserFormProps) {
+export default function AddUserForm({ roles, pgOptions, wilayahOptions = [], onCancel, onSubmit }: AddUserFormProps) {
   const [values, setValues] = useState<AddUserValues>(initialValues);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
-
-  // Convert string[] ke format dropdown menggunakan utility
-  const wilayahDropdownOptions = stringArrayToDropdown(wilayahOptions, wilayahLabelMap);
 
   const isValid = useMemo(() => {
     const nextErrors: Record<string, string> = {};
@@ -58,7 +54,6 @@ export default function AddUserForm({ roles, pgOptions, wilayahOptions, onCancel
     if (!values.phone) nextErrors.phone = 'Wajib diisi';
     if (!values.position) nextErrors.position = 'Wajib diisi';
     if (!values.plantation_group) nextErrors.plantation_group = 'Wajib diisi';
-    if (!values.wilayah) nextErrors.wilayah = 'Wajib diisi';
     if (!values.role_id) nextErrors.role_id = 'Wajib diisi';
     if (!values.password) nextErrors.password = 'Wajib diisi';
     if (values.password && values.password.length < 6) nextErrors.password = 'Min 6 karakter';
@@ -152,29 +147,6 @@ export default function AddUserForm({ roles, pgOptions, wilayahOptions, onCancel
             placeholder="Nama lengkap"
             required
           />
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Wilayah Kerja</label>
-            <select
-              value={values.wilayah}
-              onChange={(e) => handleChange('wilayah', e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            >
-              <option value="">Pilih Wilayah</option>
-              {wilayahDropdownOptions.length === 0 ? (
-                <option disabled>Memuat data wilayah...</option>
-              ) : (
-                wilayahDropdownOptions.map((w) => (
-                  <option key={w.value} value={w.value}>{w.label}</option>
-                ))
-              )}
-            </select>
-            {wilayahDropdownOptions.length === 0 && (
-              <p className="text-yellow-600 text-sm mt-1">Data wilayah belum tersedia</p>
-            )}
-            {errors.wilayah && (
-              <p className="text-red-500 text-sm mt-1">{errors.wilayah}</p>
-            )}
-          </div>
           <Input
             label="Email"
             type="email"
@@ -241,6 +213,19 @@ export default function AddUserForm({ roles, pgOptions, wilayahOptions, onCancel
             {errors.plantation_group && (
               <p className="text-red-500 text-sm mt-1">{errors.plantation_group}</p>
             )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Wilayah</label>
+            <select
+              value={values.wilayah}
+              onChange={(e) => handleChange('wilayah', e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            >
+              <option value="">Pilih Wilayah</option>
+              {wilayahOptions.map((w) => (
+                <option key={w} value={w}>{w}</option>
+              ))}
+            </select>
           </div>
         </div>
       </div>

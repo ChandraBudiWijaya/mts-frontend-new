@@ -16,7 +16,6 @@ import {
   CircleStackIcon,
   EyeIcon,
   DocumentTextIcon,
-  ChartPieIcon,
 } from '@heroicons/react/24/outline';
 
 interface NavigationItem {
@@ -60,7 +59,7 @@ export default function Sidebar({ collapsed = false, onToggleCollapse }: {
   const filter = (items: NavigationItem[]) => items;
 
   return (
-    <div className={`bg-primary-800 text-white min-h-full flex flex-col shadow-xl border-r border-primary-700 transition-all duration-300 ${
+    <div className={`bg-primary-800 text-white min-h-full w-max flex flex-col shadow-xl border-r border-primary-700 transition-all duration-300 ${
       collapsed ? 'w-16' : 'w-64'
     }`}>
       {/* Header with Logo and Collapse Button */}
@@ -96,7 +95,7 @@ export default function Sidebar({ collapsed = false, onToggleCollapse }: {
       </div>
       
       {/* Navigation */}
-      <nav className={`flex-1 py-4 ${collapsed ? 'px-2' : 'px-4'} space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-primary-400 scrollbar-track-transparent`}>
+      <nav className={`flex-1 py-4 ${collapsed ? 'px-2' : 'px-4'} space-y-3 overflow-y-auto scrollbar-thick scrollbar-thumb-primary-200 scrollbar-track-transparent`}>
         {/* Main Dashboard Section */}
         <div className="space-y-1">
           <div className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold text-primary-300 uppercase tracking-wide ${collapsed ? 'justify-center' : ''}`}>
@@ -157,14 +156,14 @@ export default function Sidebar({ collapsed = false, onToggleCollapse }: {
           })}
         </div>
 
-        {/* Work Planning Section */}
+        {/* Monitoring Section */}
         <div className="space-y-1 pt-2">
           <div className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold text-primary-300 uppercase tracking-wide ${collapsed ? 'justify-center' : ''}`}>
-            <ClipboardDocumentListIcon className="h-4 w-4" />
-            {!collapsed && <span>Work Planning</span>}
+            <EyeIcon className="h-4 w-4" />
+            {!collapsed && <span>Monitoring</span>}
           </div>
           
-          {filter(navRencanaKerja).map((item) => {
+          {filter(navLiveTracking).map((item) => {
             const isActive = location.pathname === item.href;
             return (
               <Link
@@ -187,14 +186,14 @@ export default function Sidebar({ collapsed = false, onToggleCollapse }: {
           })}
         </div>
 
-        {/* Monitoring Section */}
+        {/* Work Planning Section */}
         <div className="space-y-1 pt-2">
           <div className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold text-primary-300 uppercase tracking-wide ${collapsed ? 'justify-center' : ''}`}>
-            <EyeIcon className="h-4 w-4" />
-            {!collapsed && <span>Monitoring</span>}
+            <ClipboardDocumentListIcon className="h-4 w-4" />
+            {!collapsed && <span>Work Planning</span>}
           </div>
           
-          {filter(navLiveTracking).map((item) => {
+          {filter(navRencanaKerja).map((item) => {
             const isActive = location.pathname === item.href;
             return (
               <Link

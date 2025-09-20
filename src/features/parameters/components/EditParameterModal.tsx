@@ -50,7 +50,7 @@ const EditParameterModal: React.FC<EditParameterModalProps> = ({
     setError(null);
 
     try {
-      await parametersAPI.update(parameter.id, formData as unknown as Record<string, unknown>);
+      await parametersAPI.update(Number(parameter.id), formData as unknown as Record<string, unknown>);
       onUpdate();
       onClose();
     } catch (error: unknown) {

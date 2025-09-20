@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { employeeAPI, rbacAPI, parametersAPI, masterDataAPI } from '../../shared/api';
 import type { Employee, Role, EmployeeForm } from '../../shared/types';
 import Card from '../../components/ui/Card';
@@ -8,7 +8,7 @@ import Alert from '../../components/ui/Alert';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import AddUserForm, { type AddUserValues } from './components/AddUserForm';
-import { getErrorMessage } from '../../utils/errorHandler';
+import { getErrorMessage } from '../../shared/utils/errorHandler';
 import { 
   PlusIcon,
   PencilIcon,
@@ -16,10 +16,10 @@ import {
   EyeIcon,
   ArrowPathIcon
 } from '@heroicons/react/24/outline';
+import Pagination from '../../components/ui/Pagination';
 
 function Users() {
   const [users, setUsers] = useState<Employee[]>([]);
-  const [allUsers, setAllUsers] = useState<Employee[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -29,7 +29,6 @@ function Users() {
   const [total, setTotal] = useState(0);
   const [filters, setFilters] = useState({
     plantation_group: '',
-    wilayah: '',
     name: '',
     role: '',
     start_date: '',
@@ -47,20 +46,21 @@ function Users() {
   const emptyForm = useMemo(() => ({
     name: '',
     email: '',
+    phone: '',
     position: '',
     plantation_group: '',
-    block: '',
-    subblock: '',
+    wilayah: '',
+    role_id: '' as number | '',
     is_active: true,
   }), []);
   const [form, setForm] = useState(emptyForm);
 
   // Dropdown options
   const [pgOptions, setPgOptions] = useState<string[]>([]);
-  const [blockOptions, setBlockOptions] = useState<string[]>([]);
-  const [subblockOptions, setSubblockOptions] = useState<string[]>([]);
   const [positionOptions, setPositionOptions] = useState<string[]>([]);
   const [wilayahOptions, setWilayahOptions] = useState<string[]>([]);
+  const [nameQ, setNameQ] = useState('');
+  const nameDebounceRef = useRef<number | null>(null);
 
   useEffect(() => {
     const fetchEmployees = async () => {
@@ -85,12 +85,10 @@ function Users() {
         
         if (response.data && response.data.data) {
           setUsers(response.data.data);
-          setAllUsers(response.data.data);
           console.log('Employees set:', response.data.data);
         } else {
           console.warn('Unexpected response structure:', response.data);
           setUsers([]);
-          setAllUsers([]);
         }
       } catch (err) {
         console.error('Error fetching employees:', err);
@@ -129,7 +127,7 @@ function Users() {
         
         try {
           const pgRes = await masterDataAPI.getPlantationGroups();
-          pgData = pgRes.data.data.map(item => item.value) || [];
+          pgData = (pgRes.data?.data ?? []).map((item: any) => String(item.value ?? item.id ?? item.label));
           console.log('PG data from master API:', pgData);
         } catch (e) {
           console.warn('Failed to load PG from master API, using fallback data');
@@ -145,18 +143,9 @@ function Users() {
           posData = ['Manager', 'Supervisor', 'Assistant Manager', 'Staff', 'Operator'];
         }
         
-        try {
-          const wilayahRes = await masterDataAPI.getWilayah();
-          wilayahData = wilayahRes.data.data.map(item => item.value) || [];
-          console.log('Wilayah data from master API:', wilayahData);
-        } catch (e) {
-          console.warn('Failed to load wilayah from master API, using fallback data');
-          wilayahData = ['WIL1', 'WIL2'];
-        }
-        
         setPgOptions(pgData);
         setPositionOptions(posData);
-        setWilayahOptions(wilayahData);
+        // wilayahOptions intentionally left out per request
         
         console.log('All options set - PG:', pgData, 'Positions:', posData, 'Wilayah:', wilayahData);
       } catch (e) {
@@ -168,35 +157,14 @@ function Users() {
       }
     };
     loadParams();
-  }, []);  useEffect(() => {
-    const loadBlocks = async () => {
-      if (!form.plantation_group) { setBlockOptions([]); setSubblockOptions([]); return; }
-      try {
-        const res = await parametersAPI.getBlocks(form.plantation_group);
-        setBlockOptions(res.data || []);
-      } catch (e) { console.error(e); }
-    };
-    loadBlocks();
-  }, [form.plantation_group]);
-
-  useEffect(() => {
-    const loadSubblocks = async () => {
-      if (!form.plantation_group || !form.block) { setSubblockOptions([]); return; }
-      try {
-        const res = await parametersAPI.getSubblocks(form.plantation_group, form.block);
-        setSubblockOptions(res.data || []);
-      } catch (e) { console.error(e); }
-    };
-    loadSubblocks();
-  }, [form.plantation_group, form.block]);
+  }, []);
 
   const handleRefresh = async () => {
     try {
       setRefreshing(true);
       const response = await employeeAPI.getAll();
       if (response.data && response.data.data) {
-        setUsers(response.data.data);
-        setAllUsers(response.data.data);
+  setUsers(response.data.data);
       }
     } catch (err) {
       console.error('Error refreshing employees:', err);
@@ -218,7 +186,7 @@ function Users() {
           const byRole = filters.role ? (Array.isArray(u.roles) && u.roles.includes(filters.role)) : true;
           return byName && byPg && byRole;
         });
-        setAllUsers(rows);
+  setUsers(rows);
         setUsers(filtered);
       } catch (error) {
         console.error('Error fetching users:', error);
@@ -235,15 +203,18 @@ function Users() {
 
   const openEdit = (emp: Employee) => {
     setSelected(emp);
+    const roleName = Array.isArray(emp.roles) && emp.roles.length > 0 ? emp.roles[0] : '';
+    const roleId = roles.find(r => r.name === roleName)?.id ?? '';
     setForm({
       name: emp.name || '',
-      email: emp.email || '',
+      email: emp.user?.email || emp.email || '',
+      phone: (emp as any).phone || '',
       position: emp.position || '',
       plantation_group: emp.plantation_group || '',
-      block: emp.block || '',
-      subblock: emp.subblock || '',
+      wilayah: (emp as any).wilayah || '',
+      role_id: roleId as any,
       is_active: !!emp.is_active,
-    });
+    } as any);
     setIsEditOpen(true);
   };
 
@@ -337,19 +308,28 @@ function Users() {
   };
 
   const submitEdit = async () => {
-    if (!selected) return;
-    const empId = selected.employee_id || selected.id;
-    if (!empId) return;
+    if (!selected) return;    const empId = (selected.id as unknown) ?? (selected.employee_id as unknown);
+    if (empId === undefined || empId === null || empId === '') return;
     
     try {
-      await employeeAPI.update(Number(empId), form as any);
+      const payload: Partial<EmployeeForm> = {
+        name: (form as any).name,
+        email: (form as any).email,
+        phone: (form as any).phone,
+        position: (form as any).position,
+        plantation_group: (form as any).plantation_group,
+        wilayah: (form as any).wilayah,
+        role_id: (form as any).role_id,
+        is_active: (form as any).is_active,
+      };
+      await employeeAPI.update(empId as any, payload);
       setIsEditOpen(false);
       // refresh current page
       const res = await employeeAPI.getAll({ ...(filters as any), page, per_page: perPage } as any);
-      const payload: any = res.data;
-      const rows: Employee[] = Array.isArray(payload?.data) ? payload.data : payload?.data?.data || [];
+      const resPayload: any = res.data;
+      const rows: Employee[] = Array.isArray(resPayload?.data) ? resPayload.data : resPayload?.data?.data || [];
       setUsers(rows);
-      setTotal(Array.isArray(payload?.data) ? rows.length : payload?.data?.total || rows.length);
+      setTotal(Array.isArray(resPayload?.data) ? rows.length : resPayload?.data?.total || rows.length);
     } catch (e) {
       console.error('Error updating employee:', e);
       setError(getErrorMessage(e, 'Gagal mengupdate user'));
@@ -358,11 +338,11 @@ function Users() {
 
   const confirmDelete = async () => {
     if (!toDelete) return;
-    const empId = toDelete.employee_id || toDelete.id;
-    if (!empId) return;
+    const empId = (toDelete.id as any) ?? (toDelete.employee_id as any);
+    if (empId === undefined || empId === null || empId === '') return;
     
     try {
-      await employeeAPI.delete(Number(empId));
+      await employeeAPI.delete(empId as any);
       setToDelete(null);
       // if last item on page deleted, try previous page
       const nextPage = users.length === 1 && page > 1 ? page - 1 : page;
@@ -378,40 +358,49 @@ function Users() {
     }
   };
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
+  // Always render page shell; show spinner inside table so header/filters remain visible
 
   return (
     <div className="space-y-6 bg-gray-50 min-h-screen p-6">
-      {/* Error Alert */}
-      {error && (
-        <Alert variant="error">
-          {error}
-        </Alert>
-      )}
 
       {/* Header */}
-      <div className="flex items-center space-x-4">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Master User</h1>
-        </div>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">Master User</h1>
+            <p className="text-sm text-gray-500 mt-1">Kelola daftar user dan pekerja anda.</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button onClick={handleRefresh} className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border ${refreshing ? 'bg-gray-200' : 'bg-white'} text-sm shadow-sm`}>
+              <ArrowPathIcon className="w-4 h-4" />
+              <span className="hidden md:inline">Refresh</span>
+            </button>
+            <Button onClick={openAdd} className="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white">
+              <PlusIcon className="w-4 h-4" />
+              Tambah User
+            </Button>
       </div>
+    </div>
+
+      {/* Error Alert */}
+      {error && (
+        <div>
+          <Alert variant="error">{error}</Alert>
+        </div>
+      )}
 
       {/* Filter Bar */}
-      <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+      <div className="bg-white rounded-lg p-8 shadow-sm border border-gray-200">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Plantation Group</label>
             <select 
               value={filters.plantation_group}
               onChange={(e) => setFilters({ ...filters, plantation_group: e.target.value })}
-              className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="">All</option>
-              <option value="PG1">PG 1</option>
-              <option value="PG2">PG 2</option>
-              <option value="PG3">PG 3</option>
+              {pgOptions.map(pg => <option key={pg} value={pg}>{pg}</option>)}
             </select>
           </div>
           <div>
@@ -419,7 +408,7 @@ function Users() {
             <select 
               value={filters.role}
               onChange={(e) => setFilters({ ...filters, role: e.target.value })}
-              className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="">All</option>
               {roles.map(r => (
@@ -428,25 +417,21 @@ function Users() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Wilayah</label>
-            <select 
-              value={filters.wilayah}
-              onChange={(e) => setFilters({ ...filters, wilayah: e.target.value })}
-              className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
-            >
-              <option value="">All</option>
-              <option value="W01">W01</option>
-              <option value="W02">W02</option>
-              <option value="W03">W03</option>
-            </select>
-          </div>
-          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nama / Username</label>
             <input
               type="text"
-              value={filters.name}
-              onChange={(e) => setFilters({ ...filters, name: e.target.value })}
-              className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
+              value={nameQ}
+              onChange={(e) => {
+                const v = e.target.value;
+                setNameQ(v);
+                if (nameDebounceRef.current) window.clearTimeout(nameDebounceRef.current);
+                nameDebounceRef.current = window.setTimeout(() => {
+                  setFilters(prev => ({ ...prev, name: v }));
+                  // auto-search after debounce
+                  handleSearch();
+                }, 300) as unknown as number;
+              }}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder="Cari nama atau username..."
             />
           </div>
@@ -462,24 +447,7 @@ function Users() {
       </div>
 
       {/* Users Table */}
-      <Card
-        actions={
-          <div className="flex space-x-2">
-            <Button 
-              onClick={handleRefresh} 
-              disabled={refreshing}
-              className="bg-gray-600 hover:bg-gray-700 text-white"
-            >
-              <ArrowPathIcon className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-              {refreshing ? 'Refreshing...' : 'Refresh'}
-            </Button>
-            <Button onClick={openAdd} className="bg-primary-600 hover:bg-primary-700 text-white">
-              <PlusIcon className="w-4 h-4 mr-2" />
-              Tambah User
-            </Button>
-          </div>
-        }
-      >
+      <Card className="p-2">
         <div className="overflow-x-auto">
           <table className="min-w-full">
             <thead className="bg-primary-600">
@@ -503,7 +471,15 @@ function Users() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {users.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12">
+                    <div className="flex justify-center">
+                      <LoadingSpinner />
+                    </div>
+                  </td>
+                </tr>
+              ) : users.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
                     Tidak ada data user
@@ -511,7 +487,7 @@ function Users() {
                 </tr>
               ) : (
                 users.map((user, index) => (
-                  <tr key={user.id} className="hover:bg-gray-50">
+                  <tr key={(user.id ?? (user as any).employee_id ?? index) as any} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {index + 1}
                     </td>
@@ -551,36 +527,7 @@ function Users() {
           </table>
         </div>
 
-        {/* Pagination */}
-        <div className="flex items-center justify-between px-6 py-3 bg-gray-50 border-t border-gray-200">
-          <div className="flex items-center gap-3 text-sm text-gray-700">
-            <span>Menampilkan {(page - 1) * perPage + (users.length ? 1 : 0)} - {(page - 1) * perPage + users.length} dari {total}</span>
-            <select
-              value={perPage}
-              onChange={(e) => { setPage(1); setPerPage(Number(e.target.value)); }}
-              className="border border-gray-300 rounded px-2 py-1 text-sm"
-            >
-              {[5,10,20,50].map(n => <option key={n} value={n}>{n}/hal</option>)}
-            </select>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              disabled={page === 1}
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Sebelumnya
-            </button>
-            <span className="px-2 text-sm">Hal {page}</span>
-            <button
-              disabled={(page * perPage) >= total}
-              onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Selanjutnya
-            </button>
-          </div>
-        </div>
+        <Pagination page={page} perPage={perPage} total={total} onPageChange={(p) => setPage(p)} onPerPageChange={(n) => { setPerPage(n); setPage(1); }} perPageOptions={[5,10,20,50]} />
       </Card>
 
       {/* Add Modal */}
@@ -611,7 +558,14 @@ function Users() {
           </>
         )}
       >
-        <UserForm form={form} setForm={setForm} pgOptions={pgOptions} blockOptions={blockOptions} subblockOptions={subblockOptions} positionOptions={positionOptions} />
+        <EditUserForm 
+          form={form as any}
+          setForm={setForm as any}
+          pgOptions={pgOptions}
+          wilayahOptions={wilayahOptions}
+          positionOptions={positionOptions}
+          roles={roles}
+        />
       </Modal>
 
       {/* View Modal */}
@@ -659,22 +613,24 @@ function Row({ label, value }: { label: string; value?: string | number | null }
   );
 }
 
-function UserForm({
+function EditUserForm({
   form,
   setForm,
   pgOptions,
-  blockOptions,
-  subblockOptions,
+  wilayahOptions,
   positionOptions,
+  roles,
 }: {
   form: {
-    name: string; email: string; position: string; plantation_group: string; block: string; subblock: string; is_active: boolean;
+    id?: string;
+    name: string; email: string; phone: string; position: string; plantation_group: string; wilayah: string; role_id: number | '';
+    is_active: boolean;
   };
   setForm: (f: any) => void;
   pgOptions: string[];
-  blockOptions: string[];
-  subblockOptions: string[];
+  wilayahOptions: string[];
   positionOptions: string[];
+  roles: Role[];
 }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -698,6 +654,15 @@ function UserForm({
         />
       </div>
       <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">No HP</label>
+        <input
+          value={(form as any).phone || ''}
+          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
+          placeholder="08xxxx"
+        />
+      </div>
+      <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Jabatan</label>
         <select
           value={form.position}
@@ -709,10 +674,10 @@ function UserForm({
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Plantation Group</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">PG</label>
         <select
           value={form.plantation_group}
-          onChange={(e) => setForm({ ...form, plantation_group: e.target.value, block: '', subblock: '' })}
+          onChange={(e) => setForm({ ...form, plantation_group: e.target.value })}
           className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
         >
           <option value="">Pilih PG</option>
@@ -720,32 +685,32 @@ function UserForm({
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Block</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Wilayah</label>
         <select
-          value={form.block}
-          onChange={(e) => setForm({ ...form, block: e.target.value, subblock: '' })}
+          value={(form as any).wilayah || ''}
+          onChange={(e) => setForm({ ...form, wilayah: e.target.value })}
           className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
-          disabled={!form.plantation_group}
         >
-          <option value="">Pilih Block</option>
-          {blockOptions.map(b => <option key={b} value={b}>{b}</option>)}
+          <option value="">Pilih Wilayah</option>
+          {wilayahOptions.map(w => <option key={w} value={w}>{w}</option>)}
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Subblock</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
         <select
-          value={form.subblock}
-          onChange={(e) => setForm({ ...form, subblock: e.target.value })}
+          value={(form as any).role_id ?? ''}
+          onChange={(e) => setForm({ ...form, role_id: Number(e.target.value) })}
           className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
-          disabled={!form.block}
         >
-          <option value="">Pilih Subblock</option>
-          {subblockOptions.map(s => <option key={s} value={s}>{s}</option>)}
+          <option value="">Pilih Role</option>
+          {roles.map(r => (
+            <option key={r.id} value={r.id}>{r.name}</option>
+          ))}
         </select>
       </div>
       <div className="md:col-span-2">
         <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
+          <input type="checkbox" checked={!!form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
           Aktif
         </label>
       </div>

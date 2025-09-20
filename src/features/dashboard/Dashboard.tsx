@@ -4,7 +4,7 @@ import { format, subDays } from 'date-fns';
 import type { DashboardStats } from '../../shared/types';
 import StatCard from '../../components/ui/StatCard';
 import Card from '../../components/ui/Card';
-import MapView from '../../components/map/MapView';
+import MapView from './components/MapView';
 import { 
   UsersIcon, 
   MapPinIcon, 

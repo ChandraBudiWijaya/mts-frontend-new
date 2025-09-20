@@ -1,12 +1,3 @@
-/**
- * Parameter Types
- * 
- * Type definitions untuk parameter management
- * 
- * @author Chandra Budi Wijaya
- * @version 1.0.0
- */
-
 export interface Parameter {
   id: number;
   param_key: string;
@@ -20,12 +11,29 @@ export interface Parameter {
 
 export interface ParameterFormData {
   param_value: string;
-  description: string;
+  description?: string;
   status: boolean;
 }
 
+export interface NewParameterFormData {
+  param_key: string;
+  param_value: string;
+  description?: string;
+  group_name?: string;
+  status: boolean;
+}
+
+export type StatusFilter = '' | 'true' | 'false';
+
 export interface ParameterFilters {
   group: string;
-  status: string;
+  status: StatusFilter;
   search: string;
+}
+
+export interface EditParameterModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  parameter: Parameter | null;
+  onUpdate: () => void;
 }

@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react';
 import { MapContainer, TileLayer, Polygon, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -20,16 +21,46 @@ interface MapProps {
     lng: number;
   }[];
   height?: string;
+  // initial base layer key: 'satellite' | 'street' | 'topo'
+  initialLayer?: 'satellite' | 'street' | 'topo';
 }
 
-function Map({ center, geofence, height = 'h-96' }: MapProps) {
-  const mapStyle = {
-    height: height === 'h-96' ? '400px' : height.replace('h-', '').replace('px', '') + 'px',
-    width: '100%'
+function Map({ center, geofence, height = 'h-96', initialLayer = 'satellite' }: MapProps) {
+  const [selectedLayer, setSelectedLayer] = useState<'satellite' | 'street' | 'topo'>(initialLayer);
+
+  const mapStyle = useMemo(() => {
+    // simple mapping for common tailwind height tokens, fallback to 400px
+    if (height === 'h-96') return { height: '400px', width: '100%' };
+    // fallback: let CSS handle sizing, but provide a reasonable default
+    return { height: '400px', width: '100%' };
+  }, [height]);
+
+  
+
+  const baseLayers: Record<
+    'satellite' | 'street' | 'topo',
+    { url: string; attribution?: string; maxZoom?: number }
+  > = {
+    satellite: {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      attribution:
+        '&copy; <a href="https://www.esri.com/">Esri</a> &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+      maxZoom: 19,
+    },
+    street: {
+      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19,
+    },
+    topo: {
+      url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+      attribution: '&copy; OpenTopoMap contributors',
+      maxZoom: 17,
+    },
   };
 
   // Convert geofence points to Leaflet format
-  const polygonPositions: [number, number][] = geofence 
+  const polygonPositions: [number, number][] = geofence
     ? geofence.map(point => [point.lat, point.lng] as [number, number])
     : [];
 
@@ -49,25 +80,21 @@ function Map({ center, geofence, height = 'h-96' }: MapProps) {
         style={mapStyle}
         className="rounded-lg"
       >
-        {/* Satellite tile layer */}
+        {/* Base layer: chosen by user */}
         <TileLayer
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          attribution='&copy; <a href="https://www.esri.com/">Esri</a> &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
-        />
-        
-        {/* Street overlay for labels */}
-        <TileLayer
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-          attribution=""
-          opacity={0.5}
+          key={selectedLayer}
+          url={baseLayers[selectedLayer].url}
+          attribution={baseLayers[selectedLayer].attribution}
         />
 
         {/* Center marker */}
         <Marker position={[center.lat, center.lng]}>
           <Popup>
             <div>
-              <strong>Location Center</strong><br />
-              Lat: {center.lat.toFixed(6)}<br />
+              <strong>Location Center</strong>
+              <br />
+              Lat: {center.lat.toFixed(6)}
+              <br />
               Lng: {center.lng.toFixed(6)}
             </div>
           </Popup>
@@ -75,13 +102,11 @@ function Map({ center, geofence, height = 'h-96' }: MapProps) {
 
         {/* Geofence polygon */}
         {polygonPositions.length > 0 && (
-          <Polygon
-            positions={polygonPositions}
-            pathOptions={polygonOptions}
-          >
+          <Polygon positions={polygonPositions} pathOptions={polygonOptions}>
             <Popup>
               <div>
-                <strong>Geofence Area</strong><br />
+                <strong>Geofence Area</strong>
+                <br />
                 Points: {polygonPositions.length}
               </div>
             </Popup>
@@ -89,15 +114,37 @@ function Map({ center, geofence, height = 'h-96' }: MapProps) {
         )}
       </MapContainer>
 
-      {/* Map controls overlay */}
+      {/* Map controls overlay: layer selector */}
       <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-lg z-[1000]">
-        <div className="space-y-2">
-          <div className="text-xs text-gray-600">
-            <strong>Tipe Peta:</strong> Satellite
-          </div>
+        <div className="text-xs text-gray-700 font-medium mb-2">Tipe Peta</div>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => setSelectedLayer('satellite')}
+            className={`px-2 py-1 text-xs rounded ${selectedLayer === 'satellite' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 border'}`}
+            aria-pressed={selectedLayer === 'satellite'}
+          >
+            Satellite
+          </button>
+          <button
+            onClick={() => setSelectedLayer('street')}
+            className={`px-2 py-1 text-xs rounded ${selectedLayer === 'street' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 border'}`}
+            aria-pressed={selectedLayer === 'street'}
+          >
+            Street
+          </button>
+          <button
+            onClick={() => setSelectedLayer('topo')}
+            className={`px-2 py-1 text-xs rounded ${selectedLayer === 'topo' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 border'}`}
+            aria-pressed={selectedLayer === 'topo'}
+          >
+            Topo
+          </button>
+        </div>
+
+        <div className="mt-2 text-xs text-gray-600">
           <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-orange-400 border border-orange-600 rounded"></div>
-            <span className="text-xs text-gray-600">Geofence</span>
+            <div className="w-3 h-3 bg-orange-400 border border-orange-600 rounded" />
+            <span>Geofence</span>
           </div>
         </div>
       </div>
