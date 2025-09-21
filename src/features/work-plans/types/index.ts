@@ -1,4 +1,4 @@
-// src/features/workplans/types.ts
+// src/features/work-plans/types/index.ts
 export type WorkPlanStatus = 'Draft' | 'Submitted' | 'Approved' | 'Rejected';
 
 export type EmployeeLite = { id: string; name: string };

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { workPlanAPI } from '../../../shared/api';
 import type { WorkPlanFilters, WorkPlanRow } from '../types';
-import { applyFilter, mapWorkPlanRow } from '../utils';
+import { applyFilter, mapWorkPlanRow } from '../utils/utils';
 
 export function useWorkPlans() {
   const [allRows, setAllRows] = useState<WorkPlanRow[]>([]);

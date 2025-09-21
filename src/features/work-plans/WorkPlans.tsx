@@ -1,9 +1,8 @@
-// src/features/workplans/index.tsx
+// src/features/work-plans/WorkPlans.tsx
 import { useMemo, useState } from 'react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
-import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { ArrowPathIcon, PlusIcon } from '@heroicons/react/24/outline';
 
 import { useWorkPlans } from './hooks/useWorkPlans';
@@ -15,6 +14,7 @@ import Pagination from './components/Pagination';
 import AddModal from './components/AddModal';
 import DetailModal from './components/DetailModal';
 import DeleteDialog from './components/DeleteDialog';
+import type { WorkPlanRow } from './types';
 
 
 export default function WorkPlans() {
@@ -23,11 +23,11 @@ export default function WorkPlans() {
   const { setFilters, apply, refresh, create, remove } = actions;
 
   const { pgOptions, wilayahOptions } = usePGWilayahOptions();
-  const { page, setPage, perPage, onPerPage, total, totalPages, data, canPrev, canNext } = usePagination(rows, 10);
+  const { page, setPage, perPage, onPerPage, total, data } = usePagination(rows, 10);
 
   const [addOpen, setAddOpen] = useState(false);
-  const [selected, setSelected] = useState<any>(null);
-  const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [selected, setSelected] = useState<WorkPlanRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<WorkPlanRow | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const startIndex = useMemo(() => (page - 1) * perPage, [page, perPage]);
@@ -43,9 +43,9 @@ export default function WorkPlans() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-gray-800">Rencana Kerja</h1>
-          <p className="text-sm text-gray-500">Daftar rencana kerja, filter dan aksi</p>
+          <p className="text-sm text-gray-500">Daftar rencana kerja, filter dan aksi.</p>
         </div>
-        <div className="flex justify-end gap-2 mb-3">
+        <div className="flex justify-end gap-2">
           <Button
             variant="secondary"
             onClick={refresh}
@@ -62,8 +62,8 @@ export default function WorkPlans() {
       </div>
 
       {error && <Alert variant="error">{error}</Alert>}
-    <div className="bg-white rounded-lg p-8 shadow-sm border border-gray-200">
-        {/* Filters */}
+      
+      <Card className="p-6">
         <Filters
           value={filters}
           onChange={setFilters}
@@ -71,48 +71,37 @@ export default function WorkPlans() {
           pgOptions={pgOptions}
           wilayahOptions={wilayahOptions}
         />
+      </Card>
       
-    </div>
-
-    {/* Table */}
-    <div className="bg-white rounded-lg p-8 shadow-sm border border-gray-200">
-        {loading ? (
-          <div className="py-12 flex items-center justify-center gap-3 text-gray-600">
-            <LoadingSpinner /><span>Memuat rencana kerja...</span>
-          </div>
-        ) : (
-          <>
-            <Table
-              rows={data}
-              startIndex={startIndex}
-              onDetail={(r) => setSelected(r)}
-              onDelete={(r) => setDeleteTarget(r)}
-            />
-            <Pagination
-              page={page}
-              setPage={setPage}
-              totalPages={totalPages}
-              total={total}
-              perPage={perPage}
-              onPerPage={onPerPage}
-            />
-          </>
-        )}
-
-    </div>
+      <Card className="p-0">
+          <Table
+            rows={data}
+            startIndex={startIndex}
+            onDetail={(r) => setSelected(r)}
+            onDelete={(r) => setDeleteTarget(r)}
+            loading={loading}
+          />
+          {!loading && rows.length > 0 && (
+             <div className="p-4 border-t">
+                <Pagination
+                    page={page}
+                    perPage={perPage}
+                    total={total}
+                    onPageChange={setPage}
+                    onPerPageChange={onPerPage}
+                />
+             </div>
+          )}
+      </Card>
 
       {/* Modals */}
       <AddModal
         open={addOpen}
         onClose={() => setAddOpen(false)}
         defaultFilters={{ wilayah: filters.wilayah, plantation_group: filters.plantation_group }}
-        onSubmit={async (payload) => {
-          await create(payload);
-        }}
+        onSubmit={async (payload) => { await create(payload); }}
       />
-
       <DetailModal row={selected} onClose={() => setSelected(null)} />
-
       <DeleteDialog
         row={deleteTarget}
         deleting={deleting}

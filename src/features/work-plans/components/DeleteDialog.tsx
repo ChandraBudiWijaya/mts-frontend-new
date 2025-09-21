@@ -1,7 +1,7 @@
 // src/features/workplans/components/DeleteDialog.tsx
 import ConfirmDialog from '../../../components/ui/ConfirmDialog';
 import type { WorkPlanRow } from '../types';
-import { fmtDateDMY } from '../utils';
+import { fmtDateDMY } from '../utils/utils';
 
 type Props = {
   row: WorkPlanRow | null;

@@ -1,7 +1,7 @@
 // src/features/workplans/components/DetailModal.tsx
 import Modal from '../../../components/ui/Modal';
 import type { WorkPlanRow } from '../types';
-import { fmtDateDMY } from '../utils';
+import { fmtDateDMY } from '../utils/utils';
 
 export default function DetailModal({ row, onClose }: { row: WorkPlanRow | null; onClose: () => void }) {
   return (

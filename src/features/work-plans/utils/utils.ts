@@ -1,5 +1,5 @@
 // src/features/workplans/utils.ts
-import type { WorkPlanRow } from './types';
+import type { WorkPlanRow } from '../types';
 
 export function parsePgWilayahFromLocationCode(locationCode?: string | null) {
   if (!locationCode || typeof locationCode !== 'string') return { pg: null, wilayah: null };
