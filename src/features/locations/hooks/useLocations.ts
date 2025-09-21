@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'; // <-- Impor
+import { useState, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { geofenceAPI } from '@/shared/api';
 import { getErrorMessage } from '@/shared/utils/errorHandler';
 import { useDebounce } from '@/shared/hooks/useDebounce';
 import type { LocationRow, LocationFilter } from '../types';
 
-// Fungsi filter tetap di sini untuk dijalankan di client-side
+// Fungsi filter client-side tetap ada
 function applyFilter(rows: LocationRow[], f: LocationFilter): LocationRow[] {
   if (!rows) return [];
   return rows.filter((r) => {
@@ -29,31 +29,33 @@ export function useLocations() {
   const [filters, setFilters] = useState<LocationFilter>({ pg_group: '', region: '', q: '' });
   const debouncedQ = useDebounce(filters.q, 300);
 
-  // 1. Mengambil data dengan useQuery
-  const { data: rawItems = [], isLoading, error } = useQuery({
-    queryKey: ['geofences'], // Kunci unik untuk cache data lokasi
+  // 1. Mengambil dan meng-cache data geofence dengan useQuery
+  const { data: rawItems = [], isLoading, error } = useQuery<LocationRow[]>({
+    queryKey: ['geofences'], // Kunci unik untuk cache data ini
     queryFn: async () => {
       const res = await geofenceAPI.getAll();
       const payload: any = res.data;
+      // Normalisasi payload response API
       return Array.isArray(payload) ? payload : payload?.data ?? [];
     },
   });
 
-  // 2. Sinkronisasi DWH adalah sebuah 'mutasi' karena mengubah data di server
+  // 2. Mengelola aksi 'Sync DWH' sebagai sebuah mutasi
   const syncDwhMutation = useMutation({
     mutationFn: () => geofenceAPI.syncDwhLocations(),
     onSuccess: () => {
-      // Setelah sinkronisasi sukses, beri tahu TanStack Query
-      // bahwa data 'geofences' sudah tidak valid dan harus diambil ulang.
+      // Setelah sinkronisasi berhasil, batalkan cache 'geofences'.
+      // Ini akan secara otomatis memicu useQuery untuk mengambil data terbaru.
+      alert('Sinkronisasi DWH berhasil!');
       queryClient.invalidateQueries({ queryKey: ['geofences'] });
     },
     onError: (err) => {
-        // Bisa tambahkan notifikasi error di sini jika perlu
-        console.error("Sync DWH failed:", getErrorMessage(err));
+      // Menampilkan pesan error jika sinkronisasi gagal
+      alert(getErrorMessage(err, 'Sinkronisasi DWH gagal'));
     }
   });
 
-  // 3. Terapkan filter pada data yang sudah di-cache oleh useQuery
+  // 3. Terapkan filter pada data yang sudah di-cache oleh TanStack Query
   const items = useMemo(() => {
     const effectiveFilters = { ...filters, q: debouncedQ };
     return applyFilter(rawItems, effectiveFilters);
@@ -66,7 +68,7 @@ export function useLocations() {
     syncing: syncDwhMutation.isPending,
     filters,
     setFilters,
-    syncDwh: syncDwhMutation.mutate, // Kirim fungsi 'mutate' untuk dieksekusi
+    syncDwh: syncDwhMutation.mutate, // Gunakan 'mutate' untuk menjalankan aksi
   };
 }
 
