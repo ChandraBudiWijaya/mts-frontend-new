@@ -7,80 +7,84 @@
  * - fetch/refresh terpusat
  * Komponen halaman tinggal konsumsi hook ini.
  */
-import { useCallback, useState } from 'react';
+
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usersApi } from '../services/api';
 import { normalizeApiList } from '../services/mappers';
 import { getErrorMessage } from '@/shared/utils/errorHandler';
 import type { Employee, EmployeeForm } from '@/shared/types';
+import type { UserFilters } from '../types';
 
 export function useUsers() {
-  const [data, setData] = useState<Employee[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
-  const [filters, setFilters] = useState({ plantation_group: '', name: '', role: '' });
+  const [filters, setFilters] = useState<UserFilters>({ plantation_group: '', name: '', role: '' });
 
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await usersApi.list({
+  // Kunci query sekarang dinamis, tergantung pada filter dan paginasi
+  const queryKey = ['users', { filters, page, perPage }];
+
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const apiFilters = {
         plantation_group: filters.plantation_group || undefined,
         name: filters.name || undefined,
         role: filters.role || undefined,
-        page, per_page: perPage,
-      });
-      const norm = normalizeApiList<Employee>(res.data);
+        page, 
+        per_page: perPage
+      };
+      const res = await usersApi.list(apiFilters);
+      return normalizeApiList<Employee>(res.data);
+    },
+    placeholderData: (previousData) => previousData, // UI tidak berkedip saat refetch
+  });
 
-      // guard local filter kalau backend belum support
-      const filtered = norm.data.filter(u => {
-        const byName = filters.name ? (u.name?.toLowerCase().includes(filters.name.toLowerCase())) : true;
-        const byPg = filters.plantation_group ? (u.plantation_group === filters.plantation_group) : true;
-        const byRole = filters.role ? (Array.isArray(u.roles) && u.roles.includes(filters.role)) : true;
-        return byName && byPg && byRole;
-      });
-
-      setData(filtered);
-      setTotal(typeof norm.total === 'number' ? norm.total : filtered.length);
-      setError(null);
-    } catch (e) {
-      setData([]); setTotal(0);
-      setError(getErrorMessage(e, 'Gagal memuat data karyawan'));
-    } finally {
-      setLoading(false);
+  // Opsi untuk semua mutasi: invalidasi query 'users' agar data di-fetch ulang
+  const mutationOptions = {
+    onSuccess: () => {
+      alert('Aksi berhasil!');
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (err: unknown) => {
+      alert(getErrorMessage(err));
     }
-  }, [filters.plantation_group, filters.name, filters.role, page, perPage]);
+  };
 
-  const refresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetch();
-    setRefreshing(false);
-  }, [fetch]);
+  const createUserMutation = useMutation({
+    mutationFn: ({ payload, photoFile }: { payload: EmployeeForm, photoFile?: File | null }) => 
+      usersApi.create(payload, photoFile),
+    ...mutationOptions,
+  });
 
-  const create = useCallback(async (payload: EmployeeForm, photoFile?: File | null) => {
-    const res = await usersApi.create(payload);
-    const id = (res?.data?.id) ?? (res?.data as any)?.employee_id;
-    if (id && photoFile) {
-      try { await usersApi.uploadPhoto(id, photoFile); } catch {}
-    }
-    return res;
-  }, []);
+  const updateUserMutation = useMutation({
+    mutationFn: ({ id, body }: { id: number | string, body: Partial<EmployeeForm> }) => 
+      usersApi.update(id, body),
+    ...mutationOptions,
+  });
 
-  const update = useCallback(async (id: number | string, body: Partial<EmployeeForm>) => {
-    return usersApi.update(id, body);
-  }, []);
-
-  const remove = useCallback(async (id: number | string) => {
-    return usersApi.remove(id);
-  }, []);
+  const deleteUserMutation = useMutation({
+    mutationFn: (id: number | string) => usersApi.remove(id),
+    ...mutationOptions,
+  });
 
   return {
-    data, total, loading, refreshing, error,
-    page, setPage, perPage, setPerPage,
+    data: data?.data ?? [],
+    total: data?.total ?? 0,
+    loading: isLoading,
+    error: isError ? getErrorMessage(error) : null,
+    
+    page, setPage,
+    perPage, setPerPage,
     filters, setFilters,
-    fetch, refresh, create, update, remove,
+
+    createUser: createUserMutation.mutateAsync,
+    updateUser: updateUserMutation.mutateAsync,
+    deleteUser: deleteUserMutation.mutateAsync,
+
+    isCreating: createUserMutation.isPending,
+    isUpdating: updateUserMutation.isPending,
+    isDeleting: deleteUserMutation.isPending,
   };
 }
