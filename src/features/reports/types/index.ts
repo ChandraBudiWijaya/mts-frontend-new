@@ -1,3 +1,4 @@
+// src/features/reports/types/index.ts
 export interface ReportSummary {
   id: string; // employee_id
   mandor: string;
@@ -32,3 +33,4 @@ export interface ReportFilterState {
   dateStart: string;
   dateEnd: string;
 }
+
