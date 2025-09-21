@@ -1,33 +1,46 @@
-// src/features/live-tracking/LiveTrackingPage.tsx
-import { useMemo, useState } from "react";
+import { Card } from "@/components/ui";
 import Filters from "./components/Filters";
-import MapView from "./components/MapView"; // <- Leaflet version
-import { useLivePositions } from "./hooks/useLivePositions";
-import { useMandors } from "./hooks/useMasterData";
-import type { Mandor } from "./types";
+import MapView from "./components/MapView";
+import { useLiveTracking } from "./hooks/useLiveTracking";
 
+/**
+ * Komponen utama (container) untuk halaman Live Tracking.
+ * Tugasnya adalah memanggil hook logika dan menyusun komponen UI.
+ */
 export default function LiveTrackingPage() {
-  const [filters, setFilters] = useState<{ pgId?: string; wilayahId?: string; mandorId?: string }>({});
-  const [applied, setApplied] = useState(filters);
-  const live = useLivePositions(applied);
-  const mandors = useMandors(applied.pgId, applied.wilayahId);
-
-  const mandorLookup = useMemo<Record<string, Mandor | undefined>>(() => {
-    const r: Record<string, Mandor> = {};
-    mandors.forEach(m => r[m.id] = m);
-    return r;
-  }, [mandors]);
+  const {
+    filters,
+    setFilters,
+    pgOptions,
+    wilayahOptions,
+    mandorOptions,
+    livePositions,
+    mandorLookup,
+    handleSearch,
+  } = useLiveTracking();
 
   return (
-      <div className="space-y-6 bg-gray-50 min-h-screen p-6">
-        <div className="text-2xl font-semibold text-gray-900">Live Tracking</div>
-        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-          <Filters value={filters} onChange={setFilters} onSearch={() => setApplied(filters)} />
-        </div>
+    <div className="space-y-6 bg-gray-50 min-h-screen p-6">
+      <h1 className="text-2xl font-semibold text-gray-900">Live Tracking</h1>
+      
+      <Card>
+        <Filters
+          filters={filters}
+          onFilterChange={setFilters}
+          onSearch={handleSearch}
+          pgOptions={pgOptions}
+          wilayahOptions={wilayahOptions}
+          mandorOptions={mandorOptions}
+        />
+      </Card>
 
-      <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-        <MapView points={live} mandorLookup={mandorLookup} />
-      </div>
+      <Card className="p-0 overflow-hidden">
+        {/* Atur tinggi peta agar memenuhi sisa layar */}
+        <div className="h-[calc(100vh-280px)] w-full">
+            <MapView points={livePositions} mandorLookup={mandorLookup} />
+        </div>
+      </Card>
     </div>
   );
 }
+

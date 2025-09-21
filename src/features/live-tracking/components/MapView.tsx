@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -23,51 +23,51 @@ const defaultCenter: LatLngExpression = [-4.83, 105.24]; // area GGP
 function iconFor(p: LivePoint) {
   const isStale =
     p.updatedAt?.toDate
-      ? Date.now() - p.updatedAt.toDate().getTime() > 5 * 60 * 1000
+      ? Date.now() - p.updatedAt.toDate().getTime() > 5 * 60 * 1000 // > 5 menit
       : false;
 
   const url = isStale
-    ? "/icons/pin-gray.svg"
+    ? "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-grey.png"
     : (p.batteryPct ?? 100) < 20
-      ? "/icons/pin-red.svg"
-      : "/icons/pin-green.svg";
+      ? "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png"
+      : "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png";
 
   return L.icon({
     iconUrl: url,
-    iconSize: [36, 36],
-    iconAnchor: [18, 36],
-    popupAnchor: [0, -28],
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
   });
 }
 
-// fit bounds ke semua marker
+// Fit bounds ke semua marker
 function FitBounds({ points }: { points: LivePoint[] }) {
   const map = useMap();
   useEffect(() => {
     if (!points.length) return;
     const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng] as [number, number]));
-    map.fitBounds(bounds, { padding: [40, 40] });
+    if(bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [50, 50] });
+    }
   }, [points, map]);
   return null;
 }
 
 export default function MapView({ points, mandorLookup }: Props) {
-  // center awal: kalau ada point, pakai point pertama
   const center = useMemo<LatLngExpression>(() => {
     if (points.length) return [points[0].lat, points[0].lng];
     return defaultCenter;
   }, [points]);
 
-  // Buat layer url (tanpa API key). Kamu bisa ganti ke MapTiler/Mapbox bila perlu.
-  // Satellite: Esri World Imagery
+  // URL untuk Tile Layers
+  const GOOGLE_SAT = "https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}";
   const ESRI_SAT = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-  // Street: OpenStreetMap
   const OSM = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-  // Topographic: ESRI World Topo
-  const ESRI_TOPO = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}";
 
   return (
-    <div className="w-full h-[72vh] rounded-lg overflow-hidden">
+    <div className="w-full h-full rounded-lg overflow-hidden">
       <MapContainer
         center={center}
         zoom={13}
@@ -75,26 +75,30 @@ export default function MapView({ points, mandorLookup }: Props) {
         preferCanvas
       >
         <LayersControl position="topright">
-          <LayersControl.BaseLayer checked name="Satellite">
+          {/* Default layer sekarang adalah Google Satellite */}
+          <LayersControl.BaseLayer checked name="Google Satellite (Clear)">
+            <TileLayer 
+              url={GOOGLE_SAT} 
+              attribution="&copy; Google" 
+              subdomains={['mt0','mt1','mt2','mt3']}
+              maxZoom={20}
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="ESRI Satellite">
             <TileLayer url={ESRI_SAT} attribution="&copy; Esri" />
           </LayersControl.BaseLayer>
           <LayersControl.BaseLayer name="Street Map">
             <TileLayer url={OSM} attribution="&copy; OpenStreetMap" />
           </LayersControl.BaseLayer>
-          <LayersControl.BaseLayer name="Topographic">
-            <TileLayer url={ESRI_TOPO} attribution="&copy; Esri" />
-          </LayersControl.BaseLayer>
         </LayersControl>
 
-        {/* Fit ke semua marker saat data berubah */}
         <FitBounds points={points} />
 
-        {/* Clustering */}
         <MarkerClusterGroup chunkedLoading>
           {points.map((p) => {
             const m = mandorLookup[p.mandorId];
             const updatedText = p.updatedAt?.toDate
-              ? p.updatedAt.toDate().toLocaleString("id-ID")
+              ? p.updatedAt.toDate().toLocaleString("id-ID", { hour: '2-digit', minute: '2-digit', second: '2-digit'})
               : "-";
 
             return (
@@ -108,29 +112,28 @@ export default function MapView({ points, mandorLookup }: Props) {
                   <div className="min-w-[240px]">
                     <div className="flex items-center gap-3">
                       <img
-                        className="w-12 h-12 rounded-full object-cover"
-                        src={m?.avatarUrl || "/avatar.png"}
+                        className="w-12 h-12 rounded-full object-cover border"
+                        src={m?.avatarUrl || `https://ui-avatars.com/api/?name=${m?.name ?? 'M'}&background=random`}
+                        alt={m?.name ?? 'Avatar'}
                       />
                       <div>
                         <div className="font-semibold">{m?.name ?? p.mandorId}</div>
                         <div className="text-xs opacity-70">PG: {p.pgId} • W: {p.wilayahId}</div>
                       </div>
                     </div>
-
                     <div className="mt-2 text-sm space-y-1">
                       <div>Lokasi Terdekat: <span className="font-medium">{p.nearestLocCode ?? "-"}</span></div>
-                      <div>Battery: <span className="font-medium">{p.batteryPct ?? 0}%</span></div>
-                      <div>Last Update: <span className="font-medium">{updatedText}</span></div>
+                      <div>Baterai: <span className="font-medium">{p.batteryPct ?? 0}%</span></div>
+                      <div>Update: <span className="font-medium">{updatedText}</span></div>
                     </div>
                   </div>
                 </Popup>
 
-                {/* Cincin akurasi (opsional) */}
                 {typeof p.accuracy === "number" && p.accuracy > 0 && (
                   <Circle
                     center={[p.lat, p.lng]}
                     radius={p.accuracy}
-                    pathOptions={{ color: "#3b82f6", opacity: 0.4, fillOpacity: 0.1 }}
+                    pathOptions={{ color: "#3b82f6", opacity: 0.4, fillOpacity: 0.1, weight: 1 }}
                   />
                 )}
               </Marker>
