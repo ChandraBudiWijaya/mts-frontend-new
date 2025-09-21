@@ -1,80 +1,72 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'; // <-- Impor
 import { geofenceAPI } from '@/shared/api';
 import { getErrorMessage } from '@/shared/utils/errorHandler';
 import { useDebounce } from '@/shared/hooks/useDebounce';
 import type { LocationRow, LocationFilter } from '../types';
 
-// Fungsi filter dipindahkan ke sini
+// Fungsi filter tetap di sini untuk dijalankan di client-side
 function applyFilter(rows: LocationRow[], f: LocationFilter): LocationRow[] {
+  if (!rows) return [];
   return rows.filter((r) => {
-    const matchesPg = f.pg_group ? String((r as any).pg_group).toLowerCase() === f.pg_group.toLowerCase() : true;
-    const matchesRegion = f.region ? String((r as any).region).toLowerCase() === f.region.toLowerCase() : true;
+    const pg_group = (r as any).pg_group || '';
+    const region = (r as any).region || '';
+    const location_code = r.location_code || '';
+    const name = r.name || '';
+
+    const matchesPg = f.pg_group ? pg_group.toLowerCase() === f.pg_group.toLowerCase() : true;
+    const matchesRegion = f.region ? region.toLowerCase() === f.region.toLowerCase() : true;
     const q = f.q?.trim().toLowerCase();
     const matchesQ = q
-      ? (String(r.location_code || r.name || '').toLowerCase().includes(q))
+      ? (location_code.toLowerCase().includes(q) || name.toLowerCase().includes(q))
       : true;
     return matchesPg && matchesRegion && matchesQ;
   });
 };
 
 export function useLocations() {
-  const [rawItems, setRawItems] = useState<LocationRow[]>([]);
-  const [filteredItems, setFilteredItems] = useState<LocationRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [syncing, setSyncing] = useState(false);
+  const queryClient = useQueryClient();
   const [filters, setFilters] = useState<LocationFilter>({ pg_group: '', region: '', q: '' });
-
   const debouncedQ = useDebounce(filters.q, 300);
 
-  const fetchGeofences = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError('');
+  // 1. Mengambil data dengan useQuery
+  const { data: rawItems = [], isLoading, error } = useQuery({
+    queryKey: ['geofences'], // Kunci unik untuk cache data lokasi
+    queryFn: async () => {
       const res = await geofenceAPI.getAll();
-      const rows: LocationRow[] = Array.isArray(res.data) ? res.data : (res.data as any)?.data ?? [];
-      setRawItems(rows);
-      setFilteredItems(rows); // Awalnya tampilkan semua
-    } catch (e) {
-      setError(getErrorMessage(e, 'Gagal memuat data lokasi'));
-    } finally {
-      setLoading(false);
+      const payload: any = res.data;
+      return Array.isArray(payload) ? payload : payload?.data ?? [];
+    },
+  });
+
+  // 2. Sinkronisasi DWH adalah sebuah 'mutasi' karena mengubah data di server
+  const syncDwhMutation = useMutation({
+    mutationFn: () => geofenceAPI.syncDwhLocations(),
+    onSuccess: () => {
+      // Setelah sinkronisasi sukses, beri tahu TanStack Query
+      // bahwa data 'geofences' sudah tidak valid dan harus diambil ulang.
+      queryClient.invalidateQueries({ queryKey: ['geofences'] });
+    },
+    onError: (err) => {
+        // Bisa tambahkan notifikasi error di sini jika perlu
+        console.error("Sync DWH failed:", getErrorMessage(err));
     }
-  }, []);
+  });
 
-  useEffect(() => {
-    fetchGeofences();
-  }, [fetchGeofences]);
-
-  // Terapkan filter saat filter atau query debounce berubah
-  useEffect(() => {
-    const applied = applyFilter(rawItems, { ...filters, q: debouncedQ });
-    setFilteredItems(applied);
-  }, [debouncedQ, filters.pg_group, filters.region, rawItems, filters]);
-
-  const syncDwh = async () => {
-    try {
-      setSyncing(true);
-      setError('');
-      await geofenceAPI.syncDwhLocations();
-      await fetchGeofences(); // Muat ulang data setelah sinkronisasi
-      setFilters({ pg_group: '', region: '', q: '' }); // Reset filter
-      // Bisa tambahkan state success jika perlu
-    } catch (e) {
-      setError(getErrorMessage(e, 'Sinkronisasi DWH gagal'));
-    } finally {
-      setSyncing(false);
-    }
-  };
+  // 3. Terapkan filter pada data yang sudah di-cache oleh useQuery
+  const items = useMemo(() => {
+    const effectiveFilters = { ...filters, q: debouncedQ };
+    return applyFilter(rawItems, effectiveFilters);
+  }, [debouncedQ, filters, rawItems]);
 
   return {
-    items: filteredItems,
-    loading,
-    error,
-    syncing,
+    items,
+    loading: isLoading,
+    error: error ? getErrorMessage(error, 'Gagal memuat data lokasi') : null,
+    syncing: syncDwhMutation.isPending,
     filters,
     setFilters,
-    fetchGeofences,
-    syncDwh,
+    syncDwh: syncDwhMutation.mutate, // Kirim fungsi 'mutate' untuk dieksekusi
   };
 }
+

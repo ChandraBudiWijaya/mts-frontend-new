@@ -1,40 +1,63 @@
 import { useState } from 'react';
-import { PlusIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
-import Button from '../../components/ui/Button';
-import Alert from '../../components/ui/Alert';
-import RbacTable from './components/RbacTable';
-import RoleModal from './components/RoleModal';
+import { PlusIcon } from '@heroicons/react/24/outline';
+import { Button, Alert, Card } from '../../components/ui';
 import { useRbac } from './hooks/useRbac';
 import type { Role, RoleFormData } from './types';
 
+// Impor komponen-komponen UI yang terpisah
+import RbacFilterBar from './components/RbacFilterBar';
+import RbacTable from './components/RbacTable';
+import RoleModal from './components/RoleModal';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+
 export default function Rbac() {
-  const { roles, permissions, loading, error, refresh, createRole, updateRole, deleteRole, getRoleWithPermissions } = useRbac();
+  // Semua state dan logika data berasal dari satu hook
+  const {
+    roles, permissions, loading, error, refresh,
+    createRole, updateRole, deleteRole, getRoleWithPermissions,
+    searchTerm, setSearchTerm,
+  } = useRbac();
+
+  // State lokal hanya untuk mengontrol UI (modal, item terpilih)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [deletingRole, setDeletingRole] = useState<Role | null>(null);
 
-  const handleCreate = () => {
-    setEditingRole(null);
+  // --- Handlers untuk Aksi UI ---
+
+  const handleAdd = () => {
+    setEditingRole(null); // Pastikan tidak ada data edit saat menambah baru
     setIsModalOpen(true);
   };
-
+  
   const handleEdit = async (role: Role) => {
-    const fullRoleData = await getRoleWithPermissions(role.id);
-    setEditingRole(fullRoleData);
-    setIsModalOpen(true);
+    try {
+      // Ambil data role lengkap dengan permission-nya sebelum membuka modal
+      const fullRoleData = await getRoleWithPermissions(role.id);
+      setEditingRole(fullRoleData);
+      setIsModalOpen(true);
+    } catch (e) {
+      // Error sudah ditangani di dalam hook, tidak perlu menampilkan alert lagi di sini
+      console.error("Gagal membuka modal edit:", e);
+    }
   };
 
-  const handleDelete = async (role: Role) => {
+  const handleDelete = (role: Role) => {
     if (role.slug === 'super-admin') {
-      // Lebih baik menggunakan custom dialog/alert component
-      alert('Role Super Admin tidak dapat dihapus');
+      alert('Role Super Admin tidak dapat dihapus.');
       return;
     }
-    // Menggunakan custom dialog akan lebih baik daripada window.confirm
-    if (window.confirm(`Apakah Anda yakin ingin menghapus role "${role.name}"?`)) {
-      await deleteRole(role.id);
+    setDeletingRole(role);
+  };
+
+  const confirmDelete = async () => {
+    if (deletingRole) {
+      await deleteRole(deletingRole.id);
+      setDeletingRole(null); // Tutup dialog setelah selesai
     }
   };
 
+  // Handler ini akan diteruskan ke RoleModal
   const handleSubmit = async (data: RoleFormData) => {
     if (editingRole) {
       await updateRole(editingRole.id, data);
@@ -44,38 +67,50 @@ export default function Rbac() {
   };
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 bg-gray-50 min-h-screen p-6">
+      {/* Header Halaman */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Role & Permission Management</h1>
-          <p className="text-sm text-gray-600 mt-1">Kelola role pengguna dan permission sistem</p>
+          <h1 className="text-2xl font-semibold text-gray-900">Role & Permission</h1>
+          <p className="text-sm text-gray-600 mt-1">Kelola role pengguna dan hak akses sistem.</p>
         </div>
         <div className="flex space-x-2">
-          <Button onClick={refresh} loading={loading} variant="secondary" icon={<ArrowPathIcon className="h-4 w-4" />}>
-            Refresh
-          </Button>
-          <Button onClick={handleCreate} icon={<PlusIcon className="h-5 w-5" />}>
-            Tambah Role
-          </Button>
+          <Button onClick={refresh} disabled={loading} variant="secondary">Refresh</Button>
+          <Button onClick={handleAdd}><PlusIcon className="h-5 w-5 mr-2" /> Tambah Role</Button>
         </div>
       </div>
 
+      {/* Tampilkan notifikasi error jika ada */}
       {error && <Alert variant="error">{error}</Alert>}
 
-      {/* Teruskan prop 'loading' ke komponen tabel */}
-      <RbacTable 
-        roles={roles} 
-        onEdit={handleEdit} 
-        onDelete={handleDelete} 
-        loading={loading} 
-      />
+      {/* Komponen Filter */}
+      <RbacFilterBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
+      {/* Komponen Tabel */}
+      <Card padding="none">
+        <RbacTable
+          roles={roles}
+          loading={loading}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      </Card>
+
+      {/* Komponen-komponen Modal */}
       <RoleModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleSubmit}
         initialData={editingRole}
         permissions={permissions}
+      />
+      
+      <ConfirmDialog
+        open={!!deletingRole}
+        onClose={() => setDeletingRole(null)}
+        onConfirm={confirmDelete}
+        title={`Hapus Role "${deletingRole?.name}"?`}
+        message="Tindakan ini tidak dapat dibatalkan dan akan mempengaruhi semua user dengan role ini."
       />
     </div>
   );

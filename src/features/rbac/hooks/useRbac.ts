@@ -1,90 +1,83 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rbacAPI } from '@/shared/api';
-import { getErrorMessage } from '@/shared/utils/errorHandler';
 import type { Role, Permission, RoleFormData } from '../types';
-import { useDebounce } from '@/shared/hooks/useDebounce';
+import { getErrorMessage } from '@/shared/utils/errorHandler';
 
+/**
+ * Hook RBAC yang sudah di-refactor menggunakan TanStack Query.
+ * Logika fetching, caching, dan revalidasi data ditangani secara otomatis.
+ */
 export function useRbac() {
-  const [allRoles, setAllRoles] = useState<Role[]>([]);
-  const [permissions, setPermissions] = useState<Permission[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  const queryClient = useQueryClient();
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [rolesRes, permissionsRes] = await Promise.all([
-        rbacAPI.getAllRoles(),
-        rbacAPI.getAllPermissions()
-      ]);
-      setAllRoles(rolesRes.data.data || []);
-      setPermissions(permissionsRes.data.data || []);
-    } catch (err) {
-      setError(getErrorMessage(err, 'Gagal memuat data RBAC.'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // --- QUERIES (untuk mengambil data) ---
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const { data: roles = [], isLoading: isLoadingRoles, error: rolesError } = useQuery({
+    queryKey: ['roles'], // Kunci unik untuk cache data roles
+    queryFn: async () => {
+      const response = await rbacAPI.getAllRoles();
+      return response.data.data || [];
+    },
+  });
 
-  // Memo-isasi hasil filter untuk performa
-  const roles = useMemo(() => {
-    if (!debouncedSearchTerm) {
-      return allRoles;
-    }
-    return allRoles.filter(role =>
-      role.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
-    );
-  }, [allRoles, debouncedSearchTerm]);
+  const { data: permissions = [], isLoading: isLoadingPermissions, error: permissionsError } = useQuery({
+    queryKey: ['permissions'], // Kunci unik untuk cache data permissions
+    queryFn: async () => {
+      const response = await rbacAPI.getAllPermissions();
+      return response.data.data || [];
+    },
+  });
 
-  // Fungsi CRUD yang sudah diimplementasikan
-  const createRole = async (data: RoleFormData) => {
-    try {
-      await rbacAPI.createRole(data);
-      await loadData(); // Muat ulang data setelah berhasil
-    } catch (err) {
-      // Lempar error agar bisa ditangkap oleh komponen modal
-      throw new Error(getErrorMessage(err, 'Gagal membuat role'));
-    }
+  // --- MUTATIONS (untuk mengubah data: C-U-D) ---
+
+  // Opsi umum untuk semua mutasi: setelah berhasil, invalidasi cache 'roles'
+  // Ini akan memberitahu TanStack Query untuk mengambil ulang data roles yang terbaru.
+  const mutationOptions = {
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+    },
   };
 
-  const updateRole = async (id: number, data: RoleFormData) => {
-    try {
-      await rbacAPI.updateRole(id, data);
-      await loadData(); // Muat ulang data setelah berhasil
-    } catch (err) {
-      throw new Error(getErrorMessage(err, 'Gagal memperbarui role'));
-    }
-  };
+  const createRoleMutation = useMutation({
+    mutationFn: (data: RoleFormData) => rbacAPI.createRole(data),
+    ...mutationOptions,
+  });
+
+  const updateRoleMutation = useMutation({
+    mutationFn: (variables: { id: number; data: RoleFormData }) => rbacAPI.updateRole(variables.id, variables.data),
+    ...mutationOptions,
+  });
+
+  const deleteRoleMutation = useMutation({
+    mutationFn: (id: number) => rbacAPI.deleteRole(id),
+    ...mutationOptions,
+  });
   
   const getRoleWithPermissions = async (id: number): Promise<Role> => {
-    try {
-        const response = await rbacAPI.getRoleById(id);
-        return response.data.data;
-    } catch (err) {
-        setError(getErrorMessage(err, 'Gagal mengambil detail role'));
-        // Kembalikan objek kosong atau lempar error jika gagal
-        throw new Error('Gagal mengambil detail role');
-    }
+    // Fungsi ini tetap sama karena ini adalah aksi tunggal, bukan state berkelanjutan
+    const response = await rbacAPI.getRoleById(id);
+    return response.data.data;
   }
+
+  // Gabungkan pesan error dari kedua query
+  const error = rolesError ? getErrorMessage(rolesError) : permissionsError ? getErrorMessage(permissionsError) : null;
 
   return {
     roles,
     permissions,
-    loading,
+    loading: isLoadingRoles || isLoadingPermissions,
     error,
-    searchTerm,
-    setSearchTerm,
-    refresh: loadData,
-    createRole,
-    updateRole,
+    
+    // Kirim fungsi `mutateAsync` dari mutation hooks
+    createRole: createRoleMutation.mutateAsync,
+    updateRole: updateRoleMutation.mutateAsync,
+    deleteRole: deleteRoleMutation.mutateAsync,
     getRoleWithPermissions,
+
+    // Kirim juga status loading dari masing-masing mutasi jika diperlukan di UI
+    isCreating: createRoleMutation.isPending,
+    isUpdating: updateRoleMutation.isPending,
+    isDeleting: deleteRoleMutation.isPending,
   };
 }
 
