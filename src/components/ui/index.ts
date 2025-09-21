@@ -5,3 +5,5 @@ export { default as Input } from './Input';
 export { default as LoadingSpinner } from './LoadingSpinner';
 export { default as StatCard } from './StatCard';
 export { default as CenteredLoadingSpinner } from './CenteredLoadingSpinner';
+export { default as Modal } from './Modal';
+export { default as ConfirmDialog } from './ConfirmDialog';
