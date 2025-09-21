@@ -1,43 +1,40 @@
-import { useEffect, useRef } from 'react'
+// src/features/dashboard/components/LocationMap.tsx
+import { MapContainer, TileLayer, LayersControl } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import type { LatLngExpression } from 'leaflet';
 
-declare global {
-  interface Window {
-    L: any
-  }
-}
-
-export default function MapView() {
-  const mapEl = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    const L = window.L
-    if (!mapEl.current || !L) return
-
-    const map = L.map(mapEl.current, { zoomControl: false }).setView([-2.5, 118], 5)
-
-    const street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(map)
-
-    const satellite = L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      {
-        maxZoom: 19,
-        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, AEX, GeoEye, Earthstar, etc.',
-      },
-    )
-
-    L.control.layers({ Street: street, Satellite: satellite }).addTo(map)
-    L.control.zoom({ position: 'bottomright' }).addTo(map)
-
-    return () => map.remove()
-  }, [])
+export default function LocationMap() {
+  // Mengatur pusat peta default ke area GGP sesuai permintaan
+  const defaultCenter: LatLngExpression = [-4.83, 105.24];
 
   return (
-    <div className="flex w-full h-80 md:h-full rounded-lg overflow-hidden border">
-      <div ref={mapEl} className="w-full h-full" />
-    </div>
-  )
+    <MapContainer center={defaultCenter} zoom={13} scrollWheelZoom={false} className="w-full h-full">
+      <LayersControl position="topright">
+        {/* Lapisan Satelit (Google) dijadikan default dengan `checked` */}
+        <LayersControl.BaseLayer name="Satellite" checked>
+          <TileLayer
+            url="https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+            maxZoom={20}
+            subdomains={['mt0', 'mt1', 'mt2', 'mt3']}
+            attribution='&copy; Google Maps'
+          />
+        </LayersControl.BaseLayer>
+        
+        <LayersControl.BaseLayer name="Street Map">
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          />
+        </LayersControl.BaseLayer>
+
+        <LayersControl.BaseLayer name="Topographic">
+           <TileLayer
+            url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+            attribution='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
+          />
+        </LayersControl.BaseLayer>
+      </LayersControl>
+    </MapContainer>
+  );
 }
 
